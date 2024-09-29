@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+ash = "0.38.0"
+egui-ash = "0.4.0"
+gpu-allocator = "0.27.0"
