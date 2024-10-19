@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 ash = "0.38.0"
-bytemuck = "1.18.0"
+bytemuck = "1.19.0"
+egui = "0.25.0"
 egui-ash = { version = "0.4.0", features = ["gpu-allocator"] }
-gpu-allocator = "0.27.0"
+gpu-allocator = "0.25.0"

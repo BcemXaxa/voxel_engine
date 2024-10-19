@@ -4,11 +4,13 @@ use ash::{
     vk::{self, PhysicalDevice, QueueFamilyProperties},
     vk_bitflags_wrapped,
 };
-use std::collections::BinaryHeap;
+use gpu_allocator::vulkan::Allocator;
+use std::{collections::BinaryHeap, sync::{Arc, Mutex}};
 
 pub struct VulkanApplication {
     pub entry: ash::Entry,
     pub instance: ash::Instance,
+    pub surface: vk::SurfaceKHR,
     pub physical_device: vk::PhysicalDevice,
     pub device: ash::Device,
 }
@@ -26,7 +28,7 @@ impl Drop for VulkanApplication {
 impl VulkanApplication {
     pub fn run() {}
 
-    fn new() -> Self {
+    pub fn new() -> Self {
         let entry = Self::new_entry();
         let instance = Self::new_instance(&entry);
         let physical_device = Self::new_physical_device(&instance);
@@ -120,17 +122,29 @@ impl VulkanApplication {
         instance: &ash::Instance,
     ) -> ash::Device {
         let mut queue_families = Self::find_queue_families(physical_device, instance);
-        let queue_family_index = match queue_families.graphics.pop() {
-            Some(priority_index) => priority_index.index(),
-            None => panic!("Logical device creation failed: No graphics queues found"),
-        };
-        
-        // TODO: stopped here, 19.10.24 3:14
 
-        let queue_create_info = vk::DeviceQueueCreateInfo::default()
-            .queue_family_index(queue_family_index)
-            .queue_priorities(&[1.0]);
-        let create_info = vk::DeviceCreateInfo::default();
+        let mut queue_create_infos = Vec::new();
+
+        queue_create_infos.push({
+            let queue_family_index = match queue_families.graphics.pop() {
+                Some(priority_index) => priority_index.index(),
+                None => panic!("Logical device creation failed: No graphics queues found"),
+            };
+            vk::DeviceQueueCreateInfo::default()
+                .queue_family_index(queue_family_index)
+                .queue_priorities(&[1.0])
+        });
+        queue_create_infos.push({
+            let queue_family_index = match queue_families.transfer.pop() {
+                Some(priority_index) => priority_index.index(),
+                None => panic!("Logical device creation failed: No transfer queues found"),
+            };
+            vk::DeviceQueueCreateInfo::default()
+                .queue_family_index(queue_family_index)
+                .queue_priorities(&[1.0])
+        });
+
+        let create_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_create_infos);
 
         match unsafe { instance.create_device(physical_device, &create_info, None) } {
             Ok(device) => device,
@@ -188,11 +202,28 @@ impl VulkanApplication {
     }
 }
 
+impl egui_ash::App for VulkanApplication {
+    fn ui(&mut self, ctx: &egui::Context) {
+        todo!()
+    }
+}
+
+pub struct MyAppCreator;
+impl egui_ash::AppCreator<Arc<Mutex<Allocator>>> for MyAppCreator where {
+    type App = VulkanApplication;
+
+    fn create(&self, cc: egui_ash::CreationContext) -> (Self::App, egui_ash::AshRenderState<Arc<Mutex<Allocator>>>) {
+        todo!()
+    }
+}
+
+#[derive(Debug)]
 struct QueueFamilies {
     pub graphics: BinaryHeap<QueueFamily>,
     pub compute: BinaryHeap<QueueFamily>,
     pub transfer: BinaryHeap<QueueFamily>,
 }
+#[derive(Debug)]
 struct QueueFamily {
     priority: u8,
     index: u32,
