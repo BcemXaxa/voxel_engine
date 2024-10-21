@@ -1,115 +1,85 @@
 #![allow(unused)]
-use ash::{
-    self,
-    vk::{self, PhysicalDevice, QueueFamilyProperties},
-    vk_bitflags_wrapped,
-};
+use std::{collections::HashSet, default, sync::Arc};
+
 use gpu_allocator::vulkan::Allocator;
-use std::{collections::BinaryHeap, sync::{Arc, Mutex}};
+use vulkano::{
+    self,
+    device::{
+        physical::{PhysicalDevice, PhysicalDeviceType},
+        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateFlags,
+        QueueCreateInfo, QueueFlags,
+    },
+    instance::{Instance, InstanceCreateInfo},
+    Version, VulkanLibrary,
+};
 
-pub struct VulkanApplication {
-    pub entry: ash::Entry,
-    pub instance: ash::Instance,
-    pub surface: vk::SurfaceKHR,
-    pub physical_device: vk::PhysicalDevice,
-    pub device: ash::Device,
+pub struct App {
+    pub library: Arc<VulkanLibrary>,
+    pub instance: Arc<Instance>,
+    pub physical_device: Arc<PhysicalDevice>,
+    pub device: Arc<Device>,
+    pub queues: Vec<Arc<Queue>>,
 }
 
-impl Drop for VulkanApplication {
-    // clean up
-    fn drop(&mut self) {
-        unsafe {
-            self.device.destroy_device(None);
-            self.instance.destroy_instance(None);
-        }
-    }
-}
-
-impl VulkanApplication {
+impl App {
     pub fn run() {}
 
     pub fn new() -> Self {
-        let entry = Self::new_entry();
-        let instance = Self::new_instance(&entry);
-        let physical_device = Self::new_physical_device(&instance);
-        let device = Self::new_logical_device(physical_device, &instance);
+        let library = VulkanLibrary::new().expect("Library creation failed");
+        let instance = Self::new_instance(library.clone());
+        let physical_device = Self::new_physical_device(instance.clone());
+        let (device, queues) = Self::new_logical_device(physical_device.clone());
 
         Self {
-            entry,
+            library,
             instance,
             physical_device,
             device,
+            queues,
         }
     }
 
-    fn new_entry() -> ash::Entry {
-        match unsafe { ash::Entry::load() } {
-            Ok(entry) => entry,
-            Err(error) => panic!("Entry creation failed: {error}"),
-        }
-    }
+    fn new_instance(library: Arc<VulkanLibrary>) -> Arc<Instance> {
+        let application_version = Version {
+            major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
+            minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
+            patch: env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
+        };
 
-    fn new_instance(entry: &ash::Entry) -> ash::Instance {
-        use std::ffi::CString;
-
-        let application_name = CString::new("VoxelEngine").unwrap();
-        let engine_name = CString::new("voxen").unwrap();
-        let application_version = vk::make_api_version(
-            0,
-            env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
-            env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
-            env!("CARGO_PKG_VERSION_PATCH").parse().unwrap(),
-        );
         let engine_version = application_version;
 
-        let application_info = vk::ApplicationInfo {
-            p_application_name: application_name.as_ptr(),
-            p_engine_name: engine_name.as_ptr(),
+        let create_info = InstanceCreateInfo {
+            application_name: Some("VoxelEngine".to_string()),
+            engine_name: Some("voxen".to_string()),
             application_version,
             engine_version,
-            api_version: vk::API_VERSION_1_3,
-            ..vk::ApplicationInfo::default()
+            ..Default::default()
         };
 
-        let create_info = vk::InstanceCreateInfo {
-            p_application_info: &application_info,
-            ..vk::InstanceCreateInfo::default()
-        };
-
-        match unsafe { entry.create_instance(&create_info, None) } {
-            Ok(instance) => instance,
-            Err(error) => panic!("Instance creation failed: {error}"),
-        }
+        Instance::new(library, create_info).expect("Instance creation failed")
     }
 
-    fn new_physical_device(instance: &ash::Instance) -> vk::PhysicalDevice {
-        let physical_devices: Vec<PhysicalDevice> =
-            unsafe { instance.enumerate_physical_devices().unwrap() }
-                .into_iter()
-                .filter(|physical_device| {
-                    Self::is_physical_device_suitable(physical_device, instance)
-                })
-                .collect();
+    fn new_physical_device(instance: Arc<Instance>) -> Arc<PhysicalDevice> {
+        let physical_devices: Vec<_> = instance
+            .enumerate_physical_devices()
+            .expect("Physical devices enumeration failed")
+            .filter(|physical_device| Self::is_physical_device_suitable(physical_device, &instance))
+            .collect();
 
-        match physical_devices.into_iter().next() {
-            Some(physical_device) => physical_device,
-            None => panic!("No suitable physical devices found"),
-        }
+        physical_devices
+            .into_iter()
+            .next()
+            .expect("No suitable physical devices found")
     }
 
-    fn is_physical_device_suitable(
-        physical_device: &vk::PhysicalDevice,
-        instance: &ash::Instance,
-    ) -> bool {
-        let physical_device = physical_device.to_owned();
-
-        let properties = unsafe { instance.get_physical_device_properties(physical_device) };
+    fn is_physical_device_suitable(physical_device: &PhysicalDevice, instance: &Instance) -> bool {
+        let properties = physical_device.properties();
         let mut has_properties = true;
-        has_properties &= properties.device_type == vk::PhysicalDeviceType::DISCRETE_GPU;
+        has_properties &= properties.device_type == PhysicalDeviceType::DiscreteGpu;
 
-        let features = unsafe { instance.get_physical_device_features(physical_device) };
+        let features = physical_device.supported_features();
         let mut has_features = true;
-        has_features &= features.geometry_shader.is();
+        has_features &= features.geometry_shader;
 
         // TODO: make score system (optional)
         // TODO: make list of missing properties & features (optional)
@@ -117,148 +87,51 @@ impl VulkanApplication {
         has_properties && has_features
     }
 
-    fn new_logical_device(
-        physical_device: vk::PhysicalDevice,
-        instance: &ash::Instance,
-    ) -> ash::Device {
-        let mut queue_families = Self::find_queue_families(physical_device, instance);
+    fn new_logical_device(physical_device: Arc<PhysicalDevice>) -> (Arc<Device>, Vec<Arc<Queue>>) {
+        let mut queue_families = physical_device.queue_family_properties();
 
-        let mut queue_create_infos = Vec::new();
+        let graphics_queue_family = queue_families
+            .iter()
+            .enumerate()
+            .find_map(|(index, family_properties)| {
+                match family_properties.queue_flags.contains(QueueFlags::GRAPHICS) {
+                    true => Some(index as u32),
+                    false => None,
+                }
+            })
+            .expect("Logical device creation failed: No graphics queues found");
 
-        queue_create_infos.push({
-            let queue_family_index = match queue_families.graphics.pop() {
-                Some(priority_index) => priority_index.index(),
-                None => panic!("Logical device creation failed: No graphics queues found"),
-            };
-            vk::DeviceQueueCreateInfo::default()
-                .queue_family_index(queue_family_index)
-                .queue_priorities(&[1.0])
-        });
-        queue_create_infos.push({
-            let queue_family_index = match queue_families.transfer.pop() {
-                Some(priority_index) => priority_index.index(),
-                None => panic!("Logical device creation failed: No transfer queues found"),
-            };
-            vk::DeviceQueueCreateInfo::default()
-                .queue_family_index(queue_family_index)
-                .queue_priorities(&[1.0])
-        });
+        let transfer_queue_family = queue_families
+            .iter()
+            .enumerate()
+            .find_map(|(index, family_properties)| {
+                match family_properties.queue_flags.contains(QueueFlags::TRANSFER) {
+                    true => Some(index as u32),
+                    false => None,
+                }
+            })
+            .expect("Logical device creation failed: No transfer queues found");
 
-        let create_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_create_infos);
+        let queue_indices = HashSet::from([graphics_queue_family, transfer_queue_family]);
 
-        match unsafe { instance.create_device(physical_device, &create_info, None) } {
-            Ok(device) => device,
-            Err(error) => panic!("Logical device creation failed: {error}"),
-        }
-    }
+        let mut queue_create_infos: Vec<QueueCreateInfo> = queue_indices
+            .into_iter()
+            .map(|queue_family_index| QueueCreateInfo {
+                queue_family_index,
+                queues: vec![1.0],
+                ..Default::default()
+            })
+            .collect();
 
-    fn find_queue_families(
-        physical_device: vk::PhysicalDevice,
-        instance: &ash::Instance,
-    ) -> QueueFamilies {
-        let families_properties =
-            unsafe { instance.get_physical_device_queue_family_properties(physical_device) };
+        let create_info = DeviceCreateInfo {
+            queue_create_infos,
+            enabled_extensions: DeviceExtensions::empty(),
+            enabled_features: Features::empty(),
+            ..Default::default()
+        };
 
-        let mut graphics = BinaryHeap::new();
-        let mut compute = BinaryHeap::new();
-        let mut transfer = BinaryHeap::new();
-
-        const HIGH_PRIORITY: u8 = 1;
-        const LOW_PRIORITY: u8 = 0;
-
-        for (index, properties) in families_properties.into_iter().enumerate() {
-            let index = index as u32;
-            let mut priority = HIGH_PRIORITY;
-            if properties.queue_flags.intersects(vk::QueueFlags::GRAPHICS) {
-                graphics.push(QueueFamily {
-                    priority,
-                    index,
-                    properties,
-                });
-                priority = LOW_PRIORITY;
-            }
-            if properties.queue_flags.intersects(vk::QueueFlags::COMPUTE) {
-                compute.push(QueueFamily {
-                    priority,
-                    index,
-                    properties,
-                });
-                priority = LOW_PRIORITY;
-            }
-            if properties.queue_flags.intersects(vk::QueueFlags::TRANSFER) {
-                transfer.push(QueueFamily {
-                    priority,
-                    index,
-                    properties,
-                });
-            }
-        }
-
-        QueueFamilies {
-            graphics,
-            compute,
-            transfer,
-        }
-    }
-}
-
-impl egui_ash::App for VulkanApplication {
-    fn ui(&mut self, ctx: &egui::Context) {
-        todo!()
-    }
-}
-
-pub struct MyAppCreator;
-impl egui_ash::AppCreator<Arc<Mutex<Allocator>>> for MyAppCreator where {
-    type App = VulkanApplication;
-
-    fn create(&self, cc: egui_ash::CreationContext) -> (Self::App, egui_ash::AshRenderState<Arc<Mutex<Allocator>>>) {
-        todo!()
-    }
-}
-
-#[derive(Debug)]
-struct QueueFamilies {
-    pub graphics: BinaryHeap<QueueFamily>,
-    pub compute: BinaryHeap<QueueFamily>,
-    pub transfer: BinaryHeap<QueueFamily>,
-}
-#[derive(Debug)]
-struct QueueFamily {
-    priority: u8,
-    index: u32,
-    properties: QueueFamilyProperties,
-}
-impl QueueFamily {
-    fn index(&self) -> u32 {
-        self.index
-    }
-}
-impl PartialEq for QueueFamily {
-    fn eq(&self, other: &Self) -> bool {
-        self.priority == other.priority && self.index == other.index
-    }
-}
-impl Eq for QueueFamily {}
-impl Ord for QueueFamily {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.priority.cmp(&other.priority) {
-            std::cmp::Ordering::Equal => other.index.cmp(&self.index),
-            cmp => cmp,
-        }
-    }
-}
-impl PartialOrd for QueueFamily {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-trait IntoBool {
-    fn is(self) -> bool;
-}
-impl IntoBool for u32 {
-    fn is(self) -> bool {
-        self != 0
+        let (device, queues) =
+            Device::new(physical_device, create_info).expect("Logical device creation failed");
+        (device, queues.collect())
     }
 }
