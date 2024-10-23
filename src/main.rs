@@ -1,11 +1,14 @@
 #![allow(unused)]
 mod for_multi;
-mod vk_application;
+//mod renderer;
+mod window;
 
-use vk_application::App;
-use winit;
-use egui_winit_vulkano;
+//use renderer::Renderer;
+use vulkano::swapchain::Surface;
+use window::WindowManager;
+use winit::{event_loop::{self, EventLoop}, raw_window_handle::{HasDisplayHandle}};
 
 fn main() {
-    let app = App::new();
+    let mut window_manager = WindowManager::default();
+    window_manager.run();
 }

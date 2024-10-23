@@ -3,17 +3,14 @@ use std::{collections::HashSet, default, sync::Arc};
 
 use gpu_allocator::vulkan::Allocator;
 use vulkano::{
-    self,
-    device::{
+    self, device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateFlags,
         QueueCreateInfo, QueueFlags,
-    },
-    instance::{Instance, InstanceCreateInfo},
-    Version, VulkanLibrary,
+    }, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, swapchain::Surface, Version, VulkanLibrary
 };
 
-pub struct App {
+pub struct Renderer {
     pub library: Arc<VulkanLibrary>,
     pub instance: Arc<Instance>,
     pub physical_device: Arc<PhysicalDevice>,
@@ -21,12 +18,17 @@ pub struct App {
     pub queues: Vec<Arc<Queue>>,
 }
 
-impl App {
+impl Renderer {
     pub fn run() {}
 
     pub fn new() -> Self {
         let library = VulkanLibrary::new().expect("Library creation failed");
-        let instance = Self::new_instance(library.clone());
+
+        // FIXME: get event loop and integrate it in instance
+        let enabled_extensions = Surface::required_extensions(&event_loop);
+        let instance = Self::new_instance(library.clone(), enabled_extensions);
+        let surface = Surface::from_window(instance.clone(), window.clone()).expect("Surface creation failed");
+
         let physical_device = Self::new_physical_device(instance.clone());
         let (device, queues) = Self::new_logical_device(physical_device.clone());
 
@@ -39,7 +41,7 @@ impl App {
         }
     }
 
-    fn new_instance(library: Arc<VulkanLibrary>) -> Arc<Instance> {
+    fn new_instance(library: Arc<VulkanLibrary>, enabled_extensions: InstanceExtensions) -> Arc<Instance> {
         let application_version = Version {
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
@@ -53,6 +55,7 @@ impl App {
             engine_name: Some("voxen".to_string()),
             application_version,
             engine_version,
+            enabled_extensions,
             ..Default::default()
         };
 
