@@ -1,14 +1,23 @@
 #![allow(unused)]
-use std::{collections::HashSet, default, sync::Arc};
+use std::{
+    collections::HashSet,
+    default,
+    sync::{mpsc::Receiver, Arc},
+};
 
 use gpu_allocator::vulkan::Allocator;
 use vulkano::{
-    self, device::{
+    self,
+    device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateFlags,
         QueueCreateInfo, QueueFlags,
-    }, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, swapchain::Surface, Version, VulkanLibrary
+    },
+    instance::{Instance, InstanceCreateInfo, InstanceExtensions},
+    swapchain::Surface,
+    Version, VulkanLibrary,
 };
+use winit::window::Window;
 
 pub struct Renderer {
     pub library: Arc<VulkanLibrary>,
@@ -21,13 +30,16 @@ pub struct Renderer {
 impl Renderer {
     pub fn run() {}
 
-    pub fn new() -> Self {
+    pub fn new(
+        required_extensions_receiver: Receiver<InstanceExtensions>,
+        window_receiver: Receiver<Arc<Window>>,
+    ) -> Self {
         let library = VulkanLibrary::new().expect("Library creation failed");
 
-        // FIXME: get event loop and integrate it in instance
-        let enabled_extensions = Surface::required_extensions(&event_loop);
+        let enabled_extensions = required_extensions_receiver.recv().unwrap();
         let instance = Self::new_instance(library.clone(), enabled_extensions);
-        let surface = Surface::from_window(instance.clone(), window.clone()).expect("Surface creation failed");
+        let surface = Surface::from_window(instance.clone(), window_receiver.recv().unwrap())
+            .expect("Surface creation failed");
 
         let physical_device = Self::new_physical_device(instance.clone());
         let (device, queues) = Self::new_logical_device(physical_device.clone());
@@ -41,7 +53,10 @@ impl Renderer {
         }
     }
 
-    fn new_instance(library: Arc<VulkanLibrary>, enabled_extensions: InstanceExtensions) -> Arc<Instance> {
+    fn new_instance(
+        library: Arc<VulkanLibrary>,
+        enabled_extensions: InstanceExtensions,
+    ) -> Arc<Instance> {
         let application_version = Version {
             major: env!("CARGO_PKG_VERSION_MAJOR").parse().unwrap(),
             minor: env!("CARGO_PKG_VERSION_MINOR").parse().unwrap(),
