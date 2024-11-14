@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::{sync::mpsc, thread};
+use std::{sync::mpsc, thread, time::Duration};
 
 use renderer::Renderer;
 use window::{Application, InterfaceManager, RenderManager};

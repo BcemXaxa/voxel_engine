@@ -9,13 +9,18 @@ use gpu_allocator::vulkan::Allocator;
 use vulkano::{
     self,
     device::{
+        self,
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateFlags,
         QueueCreateInfo, QueueFlags,
     },
+    format::Format,
+    image::{Image, ImageUsage},
     instance::{Instance, InstanceCreateInfo, InstanceExtensions},
-    swapchain::Surface,
-    Version, VulkanLibrary,
+    swapchain::{
+        self, ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain, SwapchainCreateInfo
+    },
+    Version, VulkanLibrary, VulkanObject,
 };
 use winit::window::Window;
 
@@ -36,13 +41,18 @@ impl Renderer {
     ) -> Self {
         let library = VulkanLibrary::new().expect("Library creation failed");
 
-        let enabled_extensions = required_extensions_receiver.recv().unwrap();
+        let enabled_extensions = InstanceExtensions {
+            ext_surface_maintenance1: true,
+            ..required_extensions_receiver.recv().unwrap()
+        };
         let instance = Self::new_instance(library.clone(), enabled_extensions);
         let surface = Surface::from_window(instance.clone(), window_receiver.recv().unwrap())
             .expect("Surface creation failed");
 
-        let physical_device = Self::new_physical_device(instance.clone());
-        let (device, queues) = Self::new_logical_device(physical_device.clone());
+        let physical_device = Self::new_physical_device(instance.clone(), &surface);
+        let (device, queues) = Self::new_logical_device(physical_device.clone(), &surface);
+
+        let (swapchain, images) = Self::get_swapchain(&physical_device, surface.clone(), device.clone());
 
         Self {
             library,
@@ -77,11 +87,13 @@ impl Renderer {
         Instance::new(library, create_info).expect("Instance creation failed")
     }
 
-    fn new_physical_device(instance: Arc<Instance>) -> Arc<PhysicalDevice> {
+    fn new_physical_device(instance: Arc<Instance>, surface: &Surface) -> Arc<PhysicalDevice> {
         let physical_devices: Vec<_> = instance
             .enumerate_physical_devices()
             .expect("Physical devices enumeration failed")
-            .filter(|physical_device| Self::is_physical_device_suitable(physical_device, &instance))
+            .filter(|physical_device| {
+                Self::is_physical_device_suitable(physical_device, &instance, surface)
+            })
             .collect();
 
         physical_devices
@@ -90,7 +102,11 @@ impl Renderer {
             .expect("No suitable physical devices found")
     }
 
-    fn is_physical_device_suitable(physical_device: &PhysicalDevice, instance: &Instance) -> bool {
+    fn is_physical_device_suitable(
+        physical_device: &PhysicalDevice,
+        instance: &Instance,
+        surface: &Surface,
+    ) -> bool {
         let properties = physical_device.properties();
         let mut has_properties = true;
         has_properties &= properties.device_type == PhysicalDeviceType::DiscreteGpu;
@@ -99,13 +115,20 @@ impl Renderer {
         let mut has_features = true;
         has_features &= features.geometry_shader;
 
-        // TODO: make score system (optional)
-        // TODO: make list of missing properties & features (optional)
+        let extensions = physical_device.supported_extensions();
+        let mut has_extensions = true;
+        has_extensions &= extensions.khr_swapchain;
 
-        has_properties && has_features
+        // TODO: make score system (optional)
+        // TODO: make list of missing properties & features & extensions (optional)
+
+        has_properties && has_features && has_extensions
     }
 
-    fn new_logical_device(physical_device: Arc<PhysicalDevice>) -> (Arc<Device>, Vec<Arc<Queue>>) {
+    fn new_logical_device(
+        physical_device: Arc<PhysicalDevice>,
+        surface: &Surface,
+    ) -> (Arc<Device>, Vec<Arc<Queue>>) {
         let mut queue_families = physical_device.queue_family_properties();
 
         let graphics_queue_family = queue_families
@@ -119,6 +142,22 @@ impl Renderer {
             })
             .expect("Logical device creation failed: No graphics queues found");
 
+        let present_queue_family = queue_families
+            .iter()
+            .enumerate()
+            .find_map(|(queue_family_index, _)| {
+                let queue_family_index = queue_family_index as u32;
+                match physical_device.surface_support(queue_family_index, surface) {
+                    Ok(true) => Some(queue_family_index),
+                    Ok(false) => None,
+                    Err(err) => {
+                        println!("{err}");
+                        None
+                    }
+                }
+            })
+            .expect("Logical device creation failed: No presentation queues found");
+
         let transfer_queue_family = queue_families
             .iter()
             .enumerate()
@@ -130,7 +169,11 @@ impl Renderer {
             })
             .expect("Logical device creation failed: No transfer queues found");
 
-        let queue_indices = HashSet::from([graphics_queue_family, transfer_queue_family]);
+        let queue_indices = HashSet::from([
+            graphics_queue_family,
+            present_queue_family,
+            transfer_queue_family,
+        ]);
 
         let mut queue_create_infos: Vec<QueueCreateInfo> = queue_indices
             .into_iter()
@@ -141,9 +184,14 @@ impl Renderer {
             })
             .collect();
 
+        let enabled_extensions = DeviceExtensions {
+            khr_swapchain: true,
+            ..Default::default()
+        };
+
         let create_info = DeviceCreateInfo {
             queue_create_infos,
-            enabled_extensions: DeviceExtensions::empty(),
+            enabled_extensions,
             enabled_features: Features::empty(),
             ..Default::default()
         };
@@ -151,5 +199,66 @@ impl Renderer {
         let (device, queues) =
             Device::new(physical_device, create_info).expect("Logical device creation failed");
         (device, queues.collect())
+    }
+
+    fn get_swapchain(
+        physical_device: &PhysicalDevice,
+        surface: Arc<Surface>,
+        device: Arc<Device>,
+    ) -> (Arc<Swapchain>, Vec<Arc<Image>>) {
+        let surface_info = SurfaceInfo {
+            present_mode: Some(PresentMode::Mailbox),
+            ..Default::default()
+        };
+        // TODO: handle error
+        let capabilities = physical_device
+            .surface_capabilities(&surface, surface_info.clone())
+            .unwrap();
+
+        // TODO: choose best option for present mode
+        let present_mode = capabilities.compatible_present_modes.iter().next().unwrap().to_owned();
+
+        // TODO: handle error
+        let formats = physical_device
+            .surface_formats(&surface, surface_info.clone())
+            .unwrap();
+
+        // TODO: choose best option for image_format and image_color_space
+        let (image_format, image_color_space) = formats
+            .into_iter()
+            .find(|(format, colorspace)| {
+                format == &Format::B8G8R8A8_SRGB && colorspace == &ColorSpace::SrgbNonLinear
+            })
+            .unwrap();
+
+        let image_extent = Self::choose_swap_extent(&capabilities);
+
+        // TODO: check for present mode suitability
+        // TODO: check for format suitability
+        // TODO: check for extent suitability
+
+        let min_image_count = 3; // TODO: add some logic to adjust this value
+
+        // TODO: maybe add scaling behaviour and fullscreen
+        let create_info = SwapchainCreateInfo {
+            min_image_count,
+            image_format,
+            image_color_space,
+            image_extent,
+            image_usage: ImageUsage::COLOR_ATTACHMENT,
+            present_mode,
+            ..Default::default()
+        };
+
+        Swapchain::new(device, surface, create_info).unwrap()
+    }
+
+    fn choose_swap_extent(capabilities: &SurfaceCapabilities) -> [u32; 2] {
+        let min = capabilities.min_image_extent;
+        let max = capabilities.max_image_extent;
+        let width = 600.clamp(min[0], max[0]);
+        let height = 600.clamp(min[1], max[1]);
+        // in fact, it is always capabilities.current_extent
+        [width, height] // FIXME: use actual values
     }
 }
