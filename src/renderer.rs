@@ -15,11 +15,13 @@ use vulkano::{
         QueueCreateInfo, QueueFlags,
     },
     format::Format,
-    image::{Image, ImageUsage},
+    image::{sampler::ComponentMapping, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspects, ImageSubresourceRange, ImageUsage},
     instance::{Instance, InstanceCreateInfo, InstanceExtensions},
     swapchain::{
-        self, ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain, SwapchainCreateInfo
+        self, ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
+        SwapchainCreateInfo,
     },
+    sync::Sharing,
     Version, VulkanLibrary, VulkanObject,
 };
 use winit::window::Window;
@@ -30,6 +32,7 @@ pub struct Renderer {
     pub physical_device: Arc<PhysicalDevice>,
     pub device: Arc<Device>,
     pub queues: Vec<Arc<Queue>>,
+    pub swapchain: Arc<Swapchain>,
 }
 
 impl Renderer {
@@ -52,7 +55,10 @@ impl Renderer {
         let physical_device = Self::new_physical_device(instance.clone(), &surface);
         let (device, queues) = Self::new_logical_device(physical_device.clone(), &surface);
 
-        let (swapchain, images) = Self::get_swapchain(&physical_device, surface.clone(), device.clone());
+        let (swapchain, images) =
+            Self::get_swapchain(&physical_device, surface.clone(), device.clone());
+        
+        let image_views = images.iter().map(|image| Self::get_image_view(image.clone())).collect::<Vec<_>>();
 
         Self {
             library,
@@ -60,6 +66,7 @@ impl Renderer {
             physical_device,
             device,
             queues,
+            swapchain,
         }
     }
 
@@ -134,40 +141,32 @@ impl Renderer {
         let graphics_queue_family = queue_families
             .iter()
             .enumerate()
-            .find_map(|(index, family_properties)| {
-                match family_properties.queue_flags.contains(QueueFlags::GRAPHICS) {
-                    true => Some(index as u32),
-                    false => None,
-                }
+            .position(|(_, family_properties)| {
+                family_properties.queue_flags.contains(QueueFlags::GRAPHICS)
             })
-            .expect("Logical device creation failed: No graphics queues found");
+            .expect("Logical device creation failed: No graphics queues found")
+            as u32;
 
         let present_queue_family = queue_families
             .iter()
             .enumerate()
-            .find_map(|(queue_family_index, _)| {
+            .position(|(queue_family_index, _)| {
                 let queue_family_index = queue_family_index as u32;
-                match physical_device.surface_support(queue_family_index, surface) {
-                    Ok(true) => Some(queue_family_index),
-                    Ok(false) => None,
-                    Err(err) => {
-                        println!("{err}");
-                        None
-                    }
-                }
+                physical_device
+                    .surface_support(queue_family_index, surface)
+                    .unwrap()
             })
-            .expect("Logical device creation failed: No presentation queues found");
+            .expect("Logical device creation failed: No presentation queues found")
+            as u32;
 
         let transfer_queue_family = queue_families
             .iter()
             .enumerate()
-            .find_map(|(index, family_properties)| {
-                match family_properties.queue_flags.contains(QueueFlags::TRANSFER) {
-                    true => Some(index as u32),
-                    false => None,
-                }
+            .position(|(_, family_properties)| {
+                family_properties.queue_flags.contains(QueueFlags::TRANSFER)
             })
-            .expect("Logical device creation failed: No transfer queues found");
+            .expect("Logical device creation failed: No transfer queues found")
+            as u32;
 
         let queue_indices = HashSet::from([
             graphics_queue_family,
@@ -216,7 +215,12 @@ impl Renderer {
             .unwrap();
 
         // TODO: choose best option for present mode
-        let present_mode = capabilities.compatible_present_modes.iter().next().unwrap().to_owned();
+        let present_mode = capabilities
+            .compatible_present_modes
+            .iter()
+            .next()
+            .unwrap()
+            .to_owned();
 
         // TODO: handle error
         let formats = physical_device
@@ -241,12 +245,14 @@ impl Renderer {
 
         // TODO: maybe add scaling behaviour and fullscreen
         let create_info = SwapchainCreateInfo {
+            present_mode,
             min_image_count,
             image_format,
             image_color_space,
             image_extent,
             image_usage: ImageUsage::COLOR_ATTACHMENT,
-            present_mode,
+            image_sharing: Sharing::Exclusive, // FIXME: might not work because graphics_queue != present_queue
+            pre_transform: capabilities.current_transform,
             ..Default::default()
         };
 
@@ -260,5 +266,24 @@ impl Renderer {
         let height = 600.clamp(min[1], max[1]);
         // in fact, it is always capabilities.current_extent
         [width, height] // FIXME: use actual values
+    }
+
+    fn get_image_view(image: Arc<Image>) -> Arc<ImageView>{
+        let create_info = ImageViewCreateInfo{
+            view_type: ImageViewType::Dim2d,
+            format: image.format(),
+            usage: image.usage(),
+            component_mapping: ComponentMapping::identity(),
+            subresource_range: ImageSubresourceRange::from_parameters(Format::B8G8R8A8_SRGB, image.mip_levels(), image.array_layers()),
+            ..Default::default()
+        };
+
+        // TODO: handle error
+        ImageView::new(image, create_info).unwrap()
+    }
+    
+    fn create_graphics_pipeline() {
+        let vertex_shader = // TODO: Finished here 20.11.2024 0:13
+        todo!();
     }
 }
