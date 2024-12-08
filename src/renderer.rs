@@ -1,30 +1,53 @@
 #![allow(unused)]
 use std::{
     collections::HashSet,
-    default,
+    ops::RangeInclusive,
     sync::{mpsc::Receiver, Arc},
 };
 
-use gpu_allocator::vulkan::Allocator;
 use vulkano::{
-    self,
     device::{
-        self,
         physical::{PhysicalDevice, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateFlags,
-        QueueCreateInfo, QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
     },
     format::Format,
-    image::{sampler::ComponentMapping, view::{ImageView, ImageViewCreateInfo, ImageViewType}, Image, ImageAspects, ImageSubresourceRange, ImageUsage},
+    image::{
+        sampler::ComponentMapping,
+        view::{ImageView, ImageViewCreateInfo, ImageViewType},
+        Image, ImageLayout, ImageSubresourceRange, ImageUsage, SampleCount,
+    },
     instance::{Instance, InstanceCreateInfo, InstanceExtensions},
+    pipeline::{
+        graphics::{
+            color_blend::{
+                AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+                ColorComponents,
+            },
+            input_assembly::{InputAssemblyState, PrimitiveTopology},
+            multisample::MultisampleState,
+            rasterization::{
+                CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
+            },
+            vertex_input::VertexInputState,
+            viewport::{Scissor, Viewport},
+        },
+        layout::PipelineLayoutCreateInfo,
+        DynamicState, PipelineLayout, PipelineShaderStageCreateInfo,
+    },
+    render_pass::{
+        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
+        RenderPass, RenderPassCreateInfo, SubpassDescription,
+    },
     swapchain::{
-        self, ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
+        ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
         SwapchainCreateInfo,
     },
     sync::Sharing,
-    Version, VulkanLibrary, VulkanObject,
+    Version, VulkanLibrary,
 };
 use winit::window::Window;
+
+use crate::shaders;
 
 pub struct Renderer {
     pub library: Arc<VulkanLibrary>,
@@ -57,8 +80,11 @@ impl Renderer {
 
         let (swapchain, images) =
             Self::get_swapchain(&physical_device, surface.clone(), device.clone());
-        
-        let image_views = images.iter().map(|image| Self::get_image_view(image.clone())).collect::<Vec<_>>();
+
+        let image_views = images
+            .iter()
+            .map(|image| Self::get_image_view(image.clone()))
+            .collect::<Vec<_>>();
 
         Self {
             library,
@@ -268,22 +294,148 @@ impl Renderer {
         [width, height] // FIXME: use actual values
     }
 
-    fn get_image_view(image: Arc<Image>) -> Arc<ImageView>{
-        let create_info = ImageViewCreateInfo{
+    fn get_image_view(image: Arc<Image>) -> Arc<ImageView> {
+        let create_info = ImageViewCreateInfo {
             view_type: ImageViewType::Dim2d,
             format: image.format(),
             usage: image.usage(),
             component_mapping: ComponentMapping::identity(),
-            subresource_range: ImageSubresourceRange::from_parameters(Format::B8G8R8A8_SRGB, image.mip_levels(), image.array_layers()),
+            subresource_range: ImageSubresourceRange::from_parameters(
+                Format::B8G8R8A8_SRGB,
+                image.mip_levels(),
+                image.array_layers(),
+            ),
             ..Default::default()
         };
 
         // TODO: handle error
         ImageView::new(image, create_info).unwrap()
     }
-    
-    fn create_graphics_pipeline() {
-        let vertex_shader = // TODO: Finished here 20.11.2024 0:13
+
+    fn create_render_pass(device: Arc<Device>, swapchain_image_format: Format) -> Arc<RenderPass>{
+        let attachment_description = AttachmentDescription {
+            format: swapchain_image_format,
+            samples: SampleCount::Sample1,
+            load_op: AttachmentLoadOp::Clear,
+            store_op: AttachmentStoreOp::Store,
+            initial_layout: ImageLayout::Undefined,
+            final_layout: ImageLayout::PresentSrc,
+            ..Default::default()
+        };
+
+        let attachment_reference = AttachmentReference {
+            attachment: 0,
+            layout: ImageLayout::ColorAttachmentOptimal,
+            ..Default::default()
+        };
+
+        let subpass_description = SubpassDescription {
+            color_attachments: vec![Some(attachment_reference)],
+            ..Default::default()
+        };
+
+        RenderPass::new(
+            device.clone(),
+            RenderPassCreateInfo {
+                attachments: vec![attachment_description],
+                subpasses: vec![subpass_description],
+                ..Default::default()
+            },
+        ).unwrap() // TODO: handle error
+
+        // TODO: Finished here 08.12.2024 4:37
+    }
+
+    fn create_graphics_pipeline(device: Arc<Device>, swapchain_extent: [u32; 2]) {
+        // TODO: handle error
+        let vertex_shader = shaders::default_vertex_shader::load(device.clone()).unwrap();
+        // TODO: handle error
+        let fragment_shader = shaders::default_fragment_shader::load(device.clone()).unwrap();
+
+        let pipeline_stages = [
+            {
+                // TODO: handle error
+                let entry_point = vertex_shader.entry_point("main").unwrap();
+                PipelineShaderStageCreateInfo::new(entry_point)
+            },
+            {
+                // TODO: handle error
+                let entry_point = fragment_shader.entry_point("main").unwrap();
+                PipelineShaderStageCreateInfo::new(entry_point)
+            },
+        ];
+
+        let dynamic_states = [DynamicState::Viewport, DynamicState::Scissor];
+
+        // TODO: real vertex input state
+        let vertex_input_state = VertexInputState {
+            ..Default::default()
+        };
+
+        let input_assembly_state = InputAssemblyState {
+            topology: PrimitiveTopology::TriangleList,
+            primitive_restart_enable: false,
+            ..Default::default()
+        };
+
+        let viewport = Viewport {
+            // FIXME: hardcoded?
+            offset: [0.0, 0.0],
+            extent: [swapchain_extent[0] as f32, swapchain_extent[1] as f32],
+            depth_range: RangeInclusive::new(0.0, 1.0),
+        };
+
+        let scissor = Scissor {
+            // FIXME: hardcoded?
+            offset: [0, 0],
+            extent: swapchain_extent,
+        };
+
+        let rasterization_state = RasterizationState {
+            depth_clamp_enable: false,
+            rasterizer_discard_enable: false, // TODO: maybe change later
+            polygon_mode: PolygonMode::Fill,
+            cull_mode: CullMode::Back, // TODO: check if it is faster than other methods of backculling
+            front_face: FrontFace::CounterClockwise,
+            depth_bias: None,
+            line_width: 1.0,
+            line_rasterization_mode: LineRasterizationMode::Default,
+            line_stipple: None,
+            ..Default::default()
+        };
+
+        let multisample_state = MultisampleState {
+            // TODO: use multisampling
+            ..Default::default()
+        };
+
+        // TODO: maybe depth and stencil testing
+
+        let color_blend_attachment_state = ColorBlendAttachmentState {
+            blend: Some(AttachmentBlend {
+                src_color_blend_factor: BlendFactor::One,
+                dst_color_blend_factor: BlendFactor::Zero,
+                color_blend_op: BlendOp::Add,
+                src_alpha_blend_factor: BlendFactor::One,
+                dst_alpha_blend_factor: BlendFactor::Zero,
+                alpha_blend_op: BlendOp::Add,
+            }),
+            color_write_enable: true,
+            color_write_mask: ColorComponents::all(),
+        };
+
+        let color_blend_state = ColorBlendState {
+            logic_op: None,
+            flags: Default::default(),
+            attachments: Default::default(),
+            blend_constants: [0.0; 4],
+            ..Default::default()
+        };
+
+        // TODO: handle error
+        let pipeline_layout =
+            PipelineLayout::new(device.clone(), PipelineLayoutCreateInfo::default()).unwrap();
+
         todo!();
     }
 }

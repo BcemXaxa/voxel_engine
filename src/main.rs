@@ -7,6 +7,7 @@ use window::{Application, InterfaceManager, RenderManager};
 mod for_multi;
 mod renderer;
 mod window;
+mod shaders;
 
 fn main() {
     let (required_extensions_sender, required_extensions_receiver) = mpsc::channel();
