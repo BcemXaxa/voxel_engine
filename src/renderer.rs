@@ -6,18 +6,14 @@ use std::{
 };
 
 use vulkano::{
-    device::{
+    buffer::Buffer, command_buffer::{allocator::{CommandBufferAlloc, StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, pool::{CommandBufferAllocateInfo, CommandPool, CommandPoolCreateFlags, CommandPoolCreateInfo}, AutoCommandBufferBuilder, CommandBufferLevel}, device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
-    },
-    format::Format,
-    image::{
+    }, format::Format, image::{
         sampler::ComponentMapping,
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
         Image, ImageLayout, ImageSubresourceRange, ImageUsage, SampleCount,
-    },
-    instance::{Instance, InstanceCreateInfo, InstanceExtensions},
-    pipeline::{
+    }, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator}, pipeline::{
         graphics::{
             color_blend::{
                 AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
@@ -28,22 +24,20 @@ use vulkano::{
             rasterization::{
                 CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
             },
+            subpass::PipelineSubpassType,
             vertex_input::VertexInputState,
-            viewport::{Scissor, Viewport},
+            viewport::{Scissor, Viewport, ViewportState},
+            GraphicsPipelineCreateInfo,
         },
         layout::PipelineLayoutCreateInfo,
-        DynamicState, PipelineLayout, PipelineShaderStageCreateInfo,
-    },
-    render_pass::{
-        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
-        RenderPass, RenderPassCreateInfo, SubpassDescription,
-    },
-    swapchain::{
+        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+    }, render_pass::{
+        self, AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
+        Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, SubpassDescription,
+    }, swapchain::{
         ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
         SwapchainCreateInfo,
-    },
-    sync::Sharing,
-    Version, VulkanLibrary,
+    }, sync::Sharing, Version, VulkanLibrary, VulkanObject
 };
 use winit::window::Window;
 
@@ -85,6 +79,21 @@ impl Renderer {
             .iter()
             .map(|image| Self::get_image_view(image.clone()))
             .collect::<Vec<_>>();
+
+        let render_pass = Self::create_render_pass(device.clone(), swapchain.image_format());
+        let graphics_pipeline = Self::create_graphics_pipeline(
+            device.clone(),
+            render_pass.clone(),
+            swapchain.image_extent(),
+        );
+
+        let framebuffers =
+            Self::create_framebuffers(swapchain.clone(), image_views.clone(), render_pass.clone());
+
+        let command_pool = Self::create_command_pool(
+            device.clone(),
+            queues.iter().next().unwrap().clone(), // TODO: check to pass most appropriate queue
+        );
 
         Self {
             library,
@@ -312,7 +321,7 @@ impl Renderer {
         ImageView::new(image, create_info).unwrap()
     }
 
-    fn create_render_pass(device: Arc<Device>, swapchain_image_format: Format) -> Arc<RenderPass>{
+    fn create_render_pass(device: Arc<Device>, swapchain_image_format: Format) -> Arc<RenderPass> {
         let attachment_description = AttachmentDescription {
             format: swapchain_image_format,
             samples: SampleCount::Sample1,
@@ -341,12 +350,15 @@ impl Renderer {
                 subpasses: vec![subpass_description],
                 ..Default::default()
             },
-        ).unwrap() // TODO: handle error
-
-        // TODO: Finished here 08.12.2024 4:37
+        )
+        .unwrap() // TODO: handle error
     }
 
-    fn create_graphics_pipeline(device: Arc<Device>, swapchain_extent: [u32; 2]) {
+    fn create_graphics_pipeline(
+        device: Arc<Device>,
+        render_pass: Arc<RenderPass>,
+        swapchain_extent: [u32; 2],
+    ) -> Arc<GraphicsPipeline> {
         // TODO: handle error
         let vertex_shader = shaders::default_vertex_shader::load(device.clone()).unwrap();
         // TODO: handle error
@@ -378,17 +390,25 @@ impl Renderer {
             ..Default::default()
         };
 
-        let viewport = Viewport {
-            // FIXME: hardcoded?
-            offset: [0.0, 0.0],
-            extent: [swapchain_extent[0] as f32, swapchain_extent[1] as f32],
-            depth_range: RangeInclusive::new(0.0, 1.0),
-        };
+        let viewport_state = {
+            let viewport = Viewport {
+                // FIXME: hardcoded?
+                offset: [0.0, 0.0],
+                extent: [swapchain_extent[0] as f32, swapchain_extent[1] as f32],
+                depth_range: RangeInclusive::new(0.0, 1.0),
+            };
 
-        let scissor = Scissor {
-            // FIXME: hardcoded?
-            offset: [0, 0],
-            extent: swapchain_extent,
+            let scissor = Scissor {
+                // FIXME: hardcoded?
+                offset: [0, 0],
+                extent: swapchain_extent,
+            };
+
+            ViewportState {
+                viewports: [viewport].into(),
+                scissors: [scissor].into(),
+                ..Default::default()
+            }
         };
 
         let rasterization_state = RasterizationState {
@@ -425,10 +445,10 @@ impl Renderer {
         };
 
         let color_blend_state = ColorBlendState {
+            attachments: vec![color_blend_attachment_state],
             logic_op: None,
-            flags: Default::default(),
-            attachments: Default::default(),
             blend_constants: [0.0; 4],
+            flags: Default::default(),
             ..Default::default()
         };
 
@@ -436,6 +456,74 @@ impl Renderer {
         let pipeline_layout =
             PipelineLayout::new(device.clone(), PipelineLayoutCreateInfo::default()).unwrap();
 
-        todo!();
+        {
+            let mut create_info = GraphicsPipelineCreateInfo::layout(pipeline_layout);
+            create_info.stages.extend(pipeline_stages);
+            create_info.vertex_input_state = Some(vertex_input_state);
+            create_info.input_assembly_state = Some(input_assembly_state);
+            create_info.viewport_state = Some(viewport_state);
+            create_info.rasterization_state = Some(rasterization_state);
+            create_info.multisample_state = Some(multisample_state);
+            create_info.color_blend_state = Some(color_blend_state);
+            create_info.dynamic_state.extend(dynamic_states);
+            create_info.subpass = Some(PipelineSubpassType::BeginRenderPass(
+                render_pass.first_subpass(),
+            ));
+            create_info.base_pipeline = None;
+            GraphicsPipeline::new(device.clone(), None, create_info)
+        }
+        .unwrap() // TODO: handle error
+    }
+
+    fn create_framebuffers(
+        swapchain: Arc<Swapchain>,
+        image_views: Vec<Arc<ImageView>>,
+        render_pass: Arc<RenderPass>,
+    ) -> Vec<Arc<Framebuffer>> {
+        let mut framebuffers = Vec::new();
+
+        for image_view in image_views {
+            let create_info = FramebufferCreateInfo {
+                attachments: vec![image_view],
+                extent: swapchain.image_extent(),
+                ..Default::default()
+            };
+
+            // TODO: handle error
+            let framebuffer = Framebuffer::new(render_pass.clone(), create_info).unwrap();
+            framebuffers.push(framebuffer);
+        }
+
+        framebuffers
+    }
+
+    fn create_command_pool(device: Arc<Device>, queue: Arc<Queue>) -> Arc<CommandPool> {
+        let create_info = CommandPoolCreateInfo {
+            flags: CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
+            queue_family_index: queue.queue_family_index(),
+            ..Default::default()
+        };
+
+        // TODO: handle error
+        // TODO: check if Arc is neccessary
+        Arc::new(CommandPool::new(device, create_info).unwrap())
+    }
+
+    fn create_command_buffer(device: Arc<Device>){
+        let create_info = StandardCommandBufferAllocatorCreateInfo {
+            primary_buffer_count: 1,
+            ..Default::default()
+        };
+        let allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), create_info));
+
+        let allocate_info = CommandBufferAllocateInfo {
+            level: CommandBufferLevel::Primary,
+            command_buffer_count: 1,
+            ..Default::default()
+        };
+
+        let command_buffer = CommandBuffer // TODO: Finished here 6:48 09.12.2024
+
+        todo!()
     }
 }
