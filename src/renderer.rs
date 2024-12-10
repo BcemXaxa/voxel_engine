@@ -6,14 +6,21 @@ use std::{
 };
 
 use vulkano::{
-    buffer::Buffer, command_buffer::{allocator::{CommandBufferAlloc, StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, pool::{CommandBufferAllocateInfo, CommandPool, CommandPoolCreateFlags, CommandPoolCreateInfo}, AutoCommandBufferBuilder, CommandBufferLevel}, device::{
+    command_buffer::{
+        self, allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo}, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo
+    },
+    device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
-    }, format::Format, image::{
+    },
+    format::Format,
+    image::{
         sampler::ComponentMapping,
         view::{ImageView, ImageViewCreateInfo, ImageViewType},
         Image, ImageLayout, ImageSubresourceRange, ImageUsage, SampleCount,
-    }, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator}, pipeline::{
+    },
+    instance::{Instance, InstanceCreateInfo, InstanceExtensions},
+    pipeline::{
         graphics::{
             color_blend::{
                 AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
@@ -31,13 +38,17 @@ use vulkano::{
         },
         layout::PipelineLayoutCreateInfo,
         DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
-    }, render_pass::{
-        self, AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
+    },
+    render_pass::{
+        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, SubpassDescription,
-    }, swapchain::{
+    },
+    swapchain::{
         ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
         SwapchainCreateInfo,
-    }, sync::Sharing, Version, VulkanLibrary, VulkanObject
+    },
+    sync::Sharing,
+    Version, VulkanLibrary,
 };
 use winit::window::Window;
 
@@ -89,11 +100,6 @@ impl Renderer {
 
         let framebuffers =
             Self::create_framebuffers(swapchain.clone(), image_views.clone(), render_pass.clone());
-
-        let command_pool = Self::create_command_pool(
-            device.clone(),
-            queues.iter().next().unwrap().clone(), // TODO: check to pass most appropriate queue
-        );
 
         Self {
             library,
@@ -171,7 +177,7 @@ impl Renderer {
         physical_device: Arc<PhysicalDevice>,
         surface: &Surface,
     ) -> (Arc<Device>, Vec<Arc<Queue>>) {
-        let mut queue_families = physical_device.queue_family_properties();
+        let queue_families = physical_device.queue_family_properties();
 
         let graphics_queue_family = queue_families
             .iter()
@@ -209,7 +215,7 @@ impl Renderer {
             transfer_queue_family,
         ]);
 
-        let mut queue_create_infos: Vec<QueueCreateInfo> = queue_indices
+        let queue_create_infos: Vec<QueueCreateInfo> = queue_indices
             .into_iter()
             .map(|queue_family_index| QueueCreateInfo {
                 queue_family_index,
@@ -497,33 +503,61 @@ impl Renderer {
         framebuffers
     }
 
-    fn create_command_pool(device: Arc<Device>, queue: Arc<Queue>) -> Arc<CommandPool> {
-        let create_info = CommandPoolCreateInfo {
-            flags: CommandPoolCreateFlags::RESET_COMMAND_BUFFER,
-            queue_family_index: queue.queue_family_index(),
-            ..Default::default()
-        };
-
-        // TODO: handle error
-        // TODO: check if Arc is neccessary
-        Arc::new(CommandPool::new(device, create_info).unwrap())
+    fn create_command_buffer_allocator(device: Arc<Device>) -> Arc<StandardCommandBufferAllocator> {
+        // TODO: adjust primary_buffer_count
+        let create_info = StandardCommandBufferAllocatorCreateInfo::default();
+        Arc::new(StandardCommandBufferAllocator::new(
+            device.clone(),
+            create_info,
+        ))
     }
 
-    fn create_command_buffer(device: Arc<Device>){
-        let create_info = StandardCommandBufferAllocatorCreateInfo {
-            primary_buffer_count: 1,
-            ..Default::default()
-        };
-        let allocator = Arc::new(StandardCommandBufferAllocator::new(device.clone(), create_info));
+    fn create_command_buffer_builder(
+        allocator: &StandardCommandBufferAllocator,
+        queue: Arc<Queue>,
+    ) -> CmdBuilder {
+        AutoCommandBufferBuilder::primary(
+            allocator,
+            queue.queue_family_index(),
+            CommandBufferUsage::MultipleSubmit,
+        )
+        .unwrap() // TODO: handle error
+    }
 
-        let allocate_info = CommandBufferAllocateInfo {
-            level: CommandBufferLevel::Primary,
-            command_buffer_count: 1,
-            ..Default::default()
-        };
+    fn write_command_buffer(
+        mut cmd_builder: CmdBuilder,
+        framebuffer: Arc<Framebuffer>,
+        graphics_pipeline: Arc<GraphicsPipeline>,
+    ) {
+        // TODO: handle errors
+        cmd_builder
+            .begin_render_pass(
+                RenderPassBeginInfo {
+                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())], // TODO: make logic to handle possible framebuffer attachments
+                    ..RenderPassBeginInfo::framebuffer(framebuffer)
+                },
+                SubpassBeginInfo::default(),
+            )
+            .unwrap()
+            .bind_pipeline_graphics(graphics_pipeline)
+            .unwrap()
+            // TODO: set viewport if neccessary
+            // TODO: set scissors if neccessary
+            .draw(3, 1, 0, 0) // FIXME: hardcoded
+            .unwrap()
+            .end_render_pass(SubpassEndInfo::default())
+            .unwrap();
 
-        let command_buffer = CommandBuffer // TODO: Finished here 6:48 09.12.2024
+        let command_buffer = cmd_builder.build().unwrap(); // TODO: handle error
 
+        // TODO: Unfinished
         todo!()
     }
+
+    fn draw_frame() {
+        // TODO: Stopped here 8:02 10.12.2024
+    }
 }
+
+type CmdBuilder =
+    AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>;
