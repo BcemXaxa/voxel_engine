@@ -1,27 +1,26 @@
 #![allow(unused)]
 
+mod for_multi;
+mod messenger;
+mod renderer;
+mod shaders;
+mod window;
+
 use std::{sync::mpsc, thread, time::Duration};
 
+use messenger::window_renderer::WindowMessenger;
 use renderer::Renderer;
 use window::{Application, InterfaceManager, RenderManager};
-mod for_multi;
-mod renderer;
-mod window;
-mod shaders;
 
 fn main() {
-    let (required_extensions_sender, required_extensions_receiver) = mpsc::channel();
-    let (window_sender, window_receiver) = mpsc::channel();
+    let (initial_sender, initial_receiver) = mpsc::channel();
 
     let renderer_handle = thread::spawn(move || {
-        Renderer::new(required_extensions_receiver, window_receiver);
+        Renderer::new(WindowMessenger { initial_receiver });
     });
 
     Application::new(
-        RenderManager {
-            required_extensions_sender,
-            window_sender,
-        },
+        RenderManager {initial_sender},
         InterfaceManager {},
     )
     .run();

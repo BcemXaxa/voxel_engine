@@ -8,10 +8,12 @@ use winit::{
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowAttributes, WindowId},
 };
-use ApplicationEvents::*;
+use ApplicationEvent::*;
+
+use crate::messenger::window_renderer::RendererMessenger;
 
 #[derive(Debug)]
-pub enum ApplicationEvents {
+pub enum ApplicationEvent {
     CloseFix,
     CommonEvent(WindowEvent),
     RenderEvent(WindowEvent),
@@ -24,8 +26,8 @@ pub struct Application {
     render_manager: RenderManager,
     interface_manager: InterfaceManager,
 
-    event_loop: Option<EventLoop<ApplicationEvents>>,
-    proxy: EventLoopProxy<ApplicationEvents>,
+    event_loop: Option<EventLoop<ApplicationEvent>>,
+    proxy: EventLoopProxy<ApplicationEvent>,
 }
 
 impl Application {
@@ -49,7 +51,7 @@ impl Application {
     }
 }
 
-impl ApplicationHandler<ApplicationEvents> for Application {
+impl ApplicationHandler<ApplicationEvent> for Application {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let window_attributes = WindowAttributes::default()
             .with_title("title")
@@ -84,7 +86,7 @@ impl ApplicationHandler<ApplicationEvents> for Application {
             }
         }
     }
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: ApplicationEvents) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: ApplicationEvent) {
         match event {
             CloseFix => event_loop.exit(),
             _ => (),
@@ -92,28 +94,28 @@ impl ApplicationHandler<ApplicationEvents> for Application {
     }
 }
 
-pub trait WindowManager {
+pub trait ApplicationEventHandler {
     fn init(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>) {}
     fn window_event(&mut self, event_loop: &ActiveEventLoop, window: &Window, event: WindowEvent) {}
     fn application_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         window: &Window,
-        event: WindowEvent,
-    ) {
-    }
+        event: ApplicationEvent,
+    );
 }
 
-pub struct RenderManager {
-    pub required_extensions_sender: Sender<InstanceExtensions>,
-    pub window_sender: Sender<Arc<Window>>,
-}
-impl WindowManager for RenderManager {
+impl ApplicationEventHandler for RendererMessenger {
     fn init(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>) {
-        self.required_extensions_sender.send(Surface::required_extensions(&event_loop)).unwrap();
-        self.window_sender.send(window).unwrap();
+        self.initial_sender.send((window, Surface::required_extensions(&event_loop))).unwrap();
+    }
+
+    fn application_event(
+        &mut self,
+        event_loop: &ActiveEventLoop,
+        window: &Window,
+        event: ApplicationEvent,
+    ) {
+        todo!()
     }
 }
-
-pub struct InterfaceManager {}
-impl WindowManager for InterfaceManager {}
