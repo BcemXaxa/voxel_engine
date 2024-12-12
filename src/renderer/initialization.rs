@@ -1,60 +1,28 @@
-use std::{
-    collections::HashSet,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 
 use vulkano::{
-    command_buffer::{
-        allocator::{StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo},
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
-        RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
+    command_buffer::allocator::{
+        StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
     },
     device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo, QueueFlags,
+        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo,
+        QueueFamilyProperties, QueueFlags,
     },
     format::Format,
-    image::{
-        sampler::ComponentMapping,
-        view::{ImageView, ImageViewCreateInfo, ImageViewType},
-        Image, ImageLayout, ImageSubresourceRange, ImageUsage, SampleCount,
-    },
+    image::{ImageLayout, SampleCount},
     instance::{Instance, InstanceCreateInfo, InstanceExtensions},
-    pipeline::{
-        graphics::{
-            color_blend::{
-                AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
-                ColorComponents,
-            },
-            input_assembly::{InputAssemblyState, PrimitiveTopology},
-            multisample::MultisampleState,
-            rasterization::{
-                CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
-            },
-            subpass::PipelineSubpassType,
-            vertex_input::VertexInputState,
-            viewport::{Scissor, Viewport, ViewportState},
-            GraphicsPipelineCreateInfo,
-        },
-        layout::PipelineLayoutCreateInfo,
-        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
-    },
     render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
-        Framebuffer, FramebufferCreateInfo, RenderPass, RenderPassCreateInfo, SubpassDescription,
+        RenderPass, RenderPassCreateInfo, SubpassDescription,
     },
-    swapchain::{
-        ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo, Swapchain,
-        SwapchainCreateInfo,
-    },
-    sync::{semaphore::Semaphore, Sharing},
+    swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo},
     Version, VulkanLibrary,
 };
 
 use crate::messenger::window_renderer::WindowMessenger;
 
 use super::Renderer;
-use crate::shaders;
 
 // FIXME: possible memory leak
 // static members don't call "Drop" on program termination,
@@ -81,16 +49,44 @@ impl Renderer {
 
         let surface_properties = Self::surface_properties(physical_device.clone(), surface.clone());
 
-        let render_pass = Self::create_render_pass(device.clone(), surface_properties.0);
+        let render_pass = Self::create_render_pass(device.clone(), surface_properties.image_format);
+
+        let (swapchain, framebuffers) = Self::create_swapchain(
+            device.clone(),
+            surface.clone(),
+            render_pass.clone(),
+            surface_properties.clone(),
+        );
+        let graphics_pipeline = Self::create_graphics_pipeline(
+            device.clone(),
+            render_pass.clone(),
+            surface_properties.image_extent,
+        );
+
+        let command_buffer_allocator = Self::create_command_buffer_allocator(device.clone());
+        let command_buffers = Self::write_command_buffers(
+            &command_buffer_allocator,
+            queues.graphics_present().unwrap(),
+            framebuffers.clone(),
+            graphics_pipeline.clone(),
+        );
 
         Self {
+            window_msg,
+            window,
+
             instance,
             physical_device,
             device,
             queues,
-            swapchain: None,
-            framebuffers: None,
-            graphics_pipeline: None,
+
+            render_pass,
+            graphics_pipeline,
+            swapchain,
+            framebuffers,
+
+            command_buffer_allocator,
+            command_buffers,
         }
     }
 
@@ -119,11 +115,7 @@ impl Renderer {
         let physical_devices: Vec<_> = instance
             .enumerate_physical_devices()
             .expect("Physical devices enumeration failed")
-            .filter(|physical_device| {
-                Self::is_physical_device_suitable(
-                    physical_device.clone(),
-                )
-            })
+            .filter(|physical_device| Self::is_physical_device_suitable(physical_device.clone()))
             .collect();
 
         physical_devices
@@ -132,9 +124,7 @@ impl Renderer {
             .expect("No suitable physical devices found")
     }
 
-    fn is_physical_device_suitable(
-        physical_device: Arc<PhysicalDevice>,
-    ) -> bool {
+    fn is_physical_device_suitable(physical_device: Arc<PhysicalDevice>) -> bool {
         let properties = physical_device.properties();
         let mut has_properties = true;
         has_properties &= properties.device_type == PhysicalDeviceType::DiscreteGpu;
@@ -156,47 +146,27 @@ impl Renderer {
     fn create_logical_device(
         physical_device: Arc<PhysicalDevice>,
         surface: Arc<Surface>,
-    ) -> (Arc<Device>, Vec<Arc<Queue>>) {
-        let queue_families = physical_device.queue_family_properties();
+    ) -> (Arc<Device>, Queues) {
+        let families_properties = physical_device.queue_family_properties();
 
-        let graphics_queue_family = queue_families
-            .iter()
-            .enumerate()
-            .position(|(_, family_properties)| {
-                family_properties.queue_flags.contains(QueueFlags::GRAPHICS)
-            })
-            .expect("Logical device creation failed: No graphics queues found")
-            as u32;
-
-        let present_queue_family = queue_families
-            .iter()
-            .enumerate()
-            .position(|(queue_family_index, _)| {
-                let queue_family_index = queue_family_index as u32;
-                physical_device
-                    .surface_support(queue_family_index, &surface)
-                    .unwrap()
-            })
-            .expect("Logical device creation failed: No presentation queues found")
-            as u32;
-
-        let transfer_queue_family = queue_families
-            .iter()
-            .enumerate()
-            .position(|(_, family_properties)| {
-                family_properties.queue_flags.contains(QueueFlags::TRANSFER)
-            })
-            .expect("Logical device creation failed: No transfer queues found")
-            as u32;
-
-        let queue_indices = HashSet::from([
-            graphics_queue_family,
-            present_queue_family,
-            transfer_queue_family,
-        ]);
+        let queue_indices =
+            families_properties
+                .iter()
+                .enumerate()
+                .filter_map(|(index, family_properties)| {
+                    let index = index as u32;
+                    if family_properties.queue_flags.intersects(
+                        QueueFlags::GRAPHICS | QueueFlags::COMPUTE | QueueFlags::TRANSFER,
+                    ) {
+                        Some(index)
+                    } else if physical_device.surface_support(index, &surface).unwrap() {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                });
 
         let queue_create_infos: Vec<QueueCreateInfo> = queue_indices
-            .into_iter()
             .map(|queue_family_index| QueueCreateInfo {
                 queue_family_index,
                 queues: vec![1.0],
@@ -205,7 +175,7 @@ impl Renderer {
             .collect();
 
         let enabled_extensions = DeviceExtensions {
-            khr_swapchain: true,
+            khr_swapchain: true, // TODO: move extension?
             ..Default::default()
         };
 
@@ -216,9 +186,15 @@ impl Renderer {
             ..Default::default()
         };
 
-        let (device, queues) =
-            Device::new(physical_device, create_info).expect("Logical device creation failed");
-        (device, queues.collect())
+        let (device, queues) = Device::new(physical_device.clone(), create_info)
+            .expect("Logical device creation failed");
+        let queues = Queues::new(
+            queues.collect(),
+            &families_properties,
+            physical_device.clone(),
+            &surface,
+        );
+        (device, queues)
     }
 
     fn surface_info() -> SurfaceInfo {
@@ -228,10 +204,10 @@ impl Renderer {
         }
     }
 
-    pub(super) fn surface_properties (
+    pub(super) fn surface_properties(
         physical_device: Arc<PhysicalDevice>,
         surface: Arc<Surface>,
-    ) -> (Format, ColorSpace, PresentMode, [u32; 2], SurfaceCapabilities) {
+    ) -> SurfaceProperties {
         let capabilities = physical_device
             .surface_capabilities(&surface, Self::surface_info())
             .unwrap(); // TODO: handle error
@@ -257,39 +233,20 @@ impl Renderer {
             .to_owned();
 
         // in fact, it is always capabilities.current_extent
-        let image_extent = capabilities.current_extent.unwrap();
+        let extent = capabilities.current_extent.unwrap();
 
-        (format, color_space, present_mode, image_extent, capabilities)
+        SurfaceProperties {
+            image_format: format,
+            image_color_space: color_space,
+            present_mode,
+            image_extent: extent,
+            capabilities,
+        }
     }
 
-    
-    fn get_image_views(images: Vec<Arc<Image>>) -> Vec<Arc<ImageView>> {
-        images
-            .into_iter()
-            .map(|image| {
-                let create_info = ImageViewCreateInfo {
-                    view_type: ImageViewType::Dim2d,
-                    format: image.format(),
-                    usage: image.usage(),
-                    component_mapping: ComponentMapping::identity(),
-                    subresource_range: ImageSubresourceRange::from_parameters(
-                        image.format(),
-                        image.mip_levels(),
-                        image.array_layers(),
-                    ),
-                    ..Default::default()
-                };
-
-                // TODO: handle error
-                ImageView::new(image, create_info).unwrap()
-            })
-            .collect()
-    }
-
-
-    fn create_render_pass(device: Arc<Device>, swapchain_image_format: Format) -> Arc<RenderPass> {
+    fn create_render_pass(device: Arc<Device>, image_format: Format) -> Arc<RenderPass> {
         let attachment_description = AttachmentDescription {
-            format: swapchain_image_format,
+            format: image_format,
             samples: SampleCount::Sample1,
             load_op: AttachmentLoadOp::Clear,
             store_op: AttachmentStoreOp::Store,
@@ -328,52 +285,87 @@ impl Renderer {
             create_info,
         ))
     }
-
-    fn create_command_buffer_builder(
-        allocator: &StandardCommandBufferAllocator,
-        queue: Arc<Queue>,
-    ) -> CmdBuilder {
-        AutoCommandBufferBuilder::primary(
-            allocator,
-            queue.queue_family_index(),
-            CommandBufferUsage::MultipleSubmit,
-        )
-        .unwrap() // TODO: handle error
-    }
-
-    fn write_command_buffer(
-        mut cmd_builder: CmdBuilder,
-        framebuffer: Arc<Framebuffer>,
-        graphics_pipeline: Arc<GraphicsPipeline>,
-    ) -> Arc<PrimaryAutoCommandBuffer> {
-        // TODO: handle errors
-        cmd_builder
-            .begin_render_pass(
-                RenderPassBeginInfo {
-                    clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())], // TODO: make logic to handle possible framebuffer attachments
-                    ..RenderPassBeginInfo::framebuffer(framebuffer)
-                },
-                SubpassBeginInfo::default(),
-            )
-            .unwrap()
-            .bind_pipeline_graphics(graphics_pipeline)
-            .unwrap()
-            // TODO: set viewport if neccessary
-            // TODO: set scissors if neccessary
-            .draw(3, 1, 0, 0) // FIXME: hardcoded
-            .unwrap()
-            .end_render_pass(SubpassEndInfo::default())
-            .unwrap();
-
-        cmd_builder.build().unwrap() // TODO: handle error
-    }
-    fn create_sync_objects(device: Arc<Device>) -> (Semaphore, Semaphore) {
-        let image_available_semaphore = Semaphore::from_pool(device.clone()).unwrap(); // TODO: handle error
-        let render_finished_semaphore = Semaphore::from_pool(device.clone()).unwrap(); // TODO: handle error
-
-        (image_available_semaphore, render_finished_semaphore)
-    }
 }
 
-type CmdBuilder =
-    AutoCommandBufferBuilder<PrimaryAutoCommandBuffer<StandardCommandBufferAllocator>>;
+#[derive(Clone)]
+pub(super) struct SurfaceProperties {
+    pub image_format: Format,
+    pub image_color_space: ColorSpace,
+    pub present_mode: PresentMode,
+    pub image_extent: [u32; 2],
+    pub capabilities: SurfaceCapabilities,
+}
+
+type PresentSupport = bool;
+pub(super) struct Queues {
+    graphics_queues: Vec<(Arc<Queue>, QueueFlags, PresentSupport)>,
+    compute_queues: Vec<(Arc<Queue>, QueueFlags, PresentSupport)>,
+    transfer_queues: Vec<(Arc<Queue>, QueueFlags, PresentSupport)>,
+}
+
+impl Queues {
+    fn new(
+        queues: Vec<Arc<Queue>>,
+        families_properties: &[QueueFamilyProperties],
+        device: Arc<PhysicalDevice>,
+        surface: &Surface,
+    ) -> Self {
+        let mut graphics_queues = Vec::new();
+        let mut compute_queues = Vec::new();
+        let mut transfer_queues = Vec::new();
+
+        for queue in queues.into_iter() {
+            let family_index = queue.queue_family_index();
+            let flags = families_properties[family_index as usize].queue_flags;
+            let present_support = device.surface_support(family_index, surface).unwrap();
+
+            if flags.contains(QueueFlags::GRAPHICS) {
+                graphics_queues.push((queue, flags, present_support));
+            } else if flags.contains(QueueFlags::GRAPHICS) {
+                compute_queues.push((queue, flags, present_support));
+            } else if flags.contains(QueueFlags::GRAPHICS) {
+                transfer_queues.push((queue, flags, present_support));
+            }
+        }
+
+        Self {
+            graphics_queues,
+            compute_queues,
+            transfer_queues,
+        }
+    }
+
+    pub(super) fn graphics(&self) -> Result<Arc<Queue>, &str> {
+        match self.graphics_queues.iter().next() {
+            Some((queue, _, _)) => Ok(queue.clone()),
+            None => Err("Graphics queue was not found"),
+        }
+    }
+
+    pub(super) fn graphics_present(&self) -> Result<Arc<Queue>, &str> {
+        match self.graphics_queues.iter().find(|(_, _, present)| *present) {
+            Some((queue, _, _)) => Ok(queue.clone()),
+            None => Err("Graphics queue supporting presentation was not found"),
+        }
+    }
+
+    pub(super) fn compute(&self) -> Result<Arc<Queue>, &str> {
+        if let Some((queue, _, _)) = self.compute_queues.iter().next() {
+            Ok(queue.clone())
+        } else if let Ok(queue) = self.graphics() {
+            Ok(queue)
+        } else {
+            Err("Compute queue was not found")
+        }
+    }
+
+    pub(super) fn transfer(&self) -> Result<Arc<Queue>, &str> {
+        if let Some((queue, _, _)) = self.transfer_queues.iter().next() {
+            Ok(queue.clone())
+        } else if let Ok(queue) = self.compute() {
+            Ok(queue)
+        } else {
+            Err("Transfer queue was not found")
+        }
+    }
+}

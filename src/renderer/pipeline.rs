@@ -1,15 +1,41 @@
 use std::sync::Arc;
 
-use vulkano::{device::Device, pipeline::{graphics::{color_blend::{AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState, ColorComponents}, input_assembly::{InputAssemblyState, PrimitiveTopology}, multisample::MultisampleState, rasterization::{CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState}, subpass::PipelineSubpassType, vertex_input::VertexInputState, viewport::{Scissor, Viewport, ViewportState}, GraphicsPipelineCreateInfo}, layout::PipelineLayoutCreateInfo, DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo}, render_pass::RenderPass};
+use vulkano::{
+    device::Device,
+    pipeline::{
+        graphics::{
+            color_blend::{
+                AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
+                ColorComponents,
+            },
+            input_assembly::{InputAssemblyState, PrimitiveTopology},
+            multisample::MultisampleState,
+            rasterization::{
+                CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
+            },
+            subpass::PipelineSubpassType,
+            vertex_input::VertexInputState,
+            viewport::{Scissor, Viewport, ViewportState},
+            GraphicsPipelineCreateInfo,
+        },
+        layout::PipelineLayoutCreateInfo,
+        DynamicState, GraphicsPipeline, PipelineLayout, PipelineShaderStageCreateInfo,
+    },
+    render_pass::RenderPass,
+};
 
 use crate::shaders;
 
 use super::Renderer;
 
-
 impl Renderer {
+    pub(super) fn recreate_graphics_pipeline(&mut self, extent: [u32; 2]) {
+        // TODO: optimize?
+        self.graphics_pipeline =
+            Self::create_graphics_pipeline(self.device.clone(), self.render_pass.clone(), extent);
+    }
+
     pub(super) fn create_graphics_pipeline(
-        &mut self,
         device: Arc<Device>,
         render_pass: Arc<RenderPass>,
         extent: [u32; 2],
@@ -61,7 +87,7 @@ impl Renderer {
 
             ViewportState {
                 viewports: [viewport].into(),
-                scissors: [scissor].into(),
+                //scissors: [scissor].into(),
                 ..Default::default()
             }
         };
@@ -120,7 +146,7 @@ impl Renderer {
             create_info.rasterization_state = Some(rasterization_state);
             create_info.multisample_state = Some(multisample_state);
             create_info.color_blend_state = Some(color_blend_state);
-            create_info.dynamic_state.extend(dynamic_states);
+            //create_info.dynamic_state.extend(dynamic_states);
             create_info.subpass = Some(PipelineSubpassType::BeginRenderPass(
                 render_pass.first_subpass(),
             ));

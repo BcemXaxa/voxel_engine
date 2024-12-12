@@ -1,75 +1,76 @@
 use std::sync::Arc;
 
 use vulkano::{
-    device::{physical::PhysicalDevice, Device},
-    format::Format,
-    image::{Image, ImageUsage},
+    device::Device,
+    image::{
+        view::{ImageView, ImageViewCreateInfo},
+        Image, ImageUsage,
+    },
+    render_pass::{Framebuffer, FramebufferCreateInfo, RenderPass},
     swapchain::{
-        self, ColorSpace, PresentMode, Surface, SurfaceCapabilities, Swapchain, SwapchainCreateInfo,
+        Surface, Swapchain, SwapchainCreateInfo,
     },
     sync::Sharing,
 };
 
-use super::Renderer;
+use super::{initialization::SurfaceProperties, Renderer};
 
 impl Renderer {
-    
-    fn create_swapchain(
-        &mut self,
-        physical_device: Arc<PhysicalDevice>,
-        surface: Arc<Surface>,
-        device: Arc<Device>,
-    ) {
-        let (image_format, image_color_space, present_mode, image_extent, capabilities) =
-            Self::surface_properties(physical_device.clone(), surface.clone());
-
-        let (new_swapchain, new_images) = {
-            if let Some(swapchain) = self.swapchain.take() {
-                swapchain
-                    .recreate(SwapchainCreateInfo {
-                        image_extent,
-                        ..swapchain.create_info()
-                    })
-                    .unwrap() // TODO: handle error
-            } else {
-                // TODO: check for present mode suitability
-                // TODO: check for format suitability
-                // TODO: check for extent suitability
-
-                // TODO: maybe add scaling behaviour and fullscreen
-                let create_info = Self::create_info(
-                    present_mode,
-                    image_format,
-                    image_color_space,
-                    image_extent,
-                    capabilities,
-                );
-
-                Swapchain::new(device, surface, create_info).unwrap()
-            }
-        };
+    pub(super) fn recreate_swapchain(&mut self, extent: [u32; 2]) {
+        if self.swapchain.image_extent() != extent {
+            let (new_swapchain, images) = self
+                .swapchain
+                .recreate(SwapchainCreateInfo {
+                    image_extent: extent,
+                    ..self.swapchain.create_info()
+                })
+                .unwrap(); // TODO: handle error
+            let new_framebuffers =
+                Self::create_framebuffers(new_swapchain.clone(), images, self.render_pass.clone());
+            self.swapchain = new_swapchain;
+            self.framebuffers = new_framebuffers;
+        }
     }
 
-    fn create_info(
-        present_mode: PresentMode,
-        image_format: Format,
-        image_color_space: ColorSpace,
-        image_extent: [u32; 2],
-        capabilities: SurfaceCapabilities,
-    ) -> SwapchainCreateInfo {
-        let min_image_count = (capabilities.min_image_count + 1).max(3); // TODO: add some logic to adjust this value
+    pub(super) fn create_swapchain(
+        device: Arc<Device>,
+        surface: Arc<Surface>,
+        render_pass: Arc<RenderPass>,
+        surface_properties: SurfaceProperties,
+    ) -> (Arc<Swapchain>, Vec<Arc<Framebuffer>>) {
+        let (swapchain, images) = {
+            let SurfaceProperties {
+                image_format,
+                image_color_space,
+                present_mode,
+                image_extent,
+                capabilities,
+            } = surface_properties;
 
-        SwapchainCreateInfo {
-            present_mode,
-            min_image_count,
-            image_format,
-            image_color_space,
-            image_extent,
-            image_usage: ImageUsage::COLOR_ATTACHMENT,
-            image_sharing: Sharing::Exclusive, // FIXME: might not work because graphics_queue != present_queue
-            pre_transform: capabilities.current_transform,
-            ..Default::default()
-        }
+            // TODO: check for present mode suitability
+            // TODO: check for format suitability
+            // TODO: check for extent suitability
+
+            // TODO: maybe add scaling behaviour and fullscreen
+            let min_image_count = (capabilities.min_image_count + 1).max(3); // TODO: add some logic to adjust this value
+
+            let create_info = SwapchainCreateInfo {
+                present_mode,
+                min_image_count,
+                image_format,
+                image_color_space,
+                image_extent,
+                image_usage: ImageUsage::COLOR_ATTACHMENT,
+                image_sharing: Sharing::Exclusive, // FIXME: might not work because graphics_queue != present_queue
+                pre_transform: capabilities.current_transform,
+                ..Default::default()
+            };
+
+            Swapchain::new(device, surface, create_info).unwrap()
+        };
+
+        let framebuffers = Self::create_framebuffers(swapchain.clone(), images, render_pass);
+        (swapchain, framebuffers)
     }
 
     fn create_framebuffers(
@@ -87,6 +88,19 @@ impl Renderer {
                     ..Default::default()
                 };
                 Framebuffer::new(render_pass.clone(), create_info).unwrap() // TODO: handle error
+            })
+            .collect()
+    }
+
+    fn get_image_views(images: Vec<Arc<Image>>) -> Vec<Arc<ImageView>> {
+        images
+            .into_iter()
+            .map(|image| {
+                // TODO: possibly incorrect
+                let create_info = ImageViewCreateInfo::from_image(&image);
+
+                // TODO: handle error
+                ImageView::new(image, create_info).unwrap()
             })
             .collect()
     }

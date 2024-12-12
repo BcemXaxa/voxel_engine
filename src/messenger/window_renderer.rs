@@ -6,13 +6,13 @@ use std::sync::{
 use vulkano::instance::InstanceExtensions;
 use winit::window::Window;
 
-use crate::window::ApplicationEvent;
+use crate::{renderer::RendererIncomingEvent, window::ApplicationEvent};
 
 pub struct WindowMessenger {
     pub initial_receiver: Receiver<(Arc<Window>, InstanceExtensions)>,
-    pub run_receiver: Receiver<ApplicationEvent>,
+    pub run_receiver: Receiver<RendererIncomingEvent>,
 }
 pub struct RendererMessenger {
     pub initial_sender: Sender<(Arc<Window>, InstanceExtensions)>,
-    pub run_sender: Sender<ApplicationEvent>,
+    pub run_sender: Sender<RendererIncomingEvent>,
 }
