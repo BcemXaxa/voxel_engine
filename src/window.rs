@@ -71,7 +71,6 @@ impl ApplicationHandler<ApplicationEvent> for Application {
                 self.proxy.send_event(CloseFix).expect("Proxy send failed");
             }
             RedrawRequested => {
-                println!("redraw");
                 self.renderer.as_mut().unwrap().recreate(None);
                 self.renderer.as_mut().unwrap().draw();
             }

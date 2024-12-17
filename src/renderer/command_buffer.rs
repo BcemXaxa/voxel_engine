@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use vulkano::{
     command_buffer::{
-        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
-        PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassEndInfo,
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer, RenderPassBeginInfo, SubpassBeginInfo, SubpassContents, SubpassEndInfo
     },
     device::Queue,
     pipeline::{graphics::viewport::Viewport, GraphicsPipeline},
@@ -40,10 +39,13 @@ impl Renderer {
                 cmd_builder
                     .begin_render_pass(
                         RenderPassBeginInfo {
-                            clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())], // TODO: make logic to handle possible framebuffer attachments
+                            clear_values: vec![Some([0.0, 0.0, 0.2, 1.0].into())], // TODO: make logic to handle possible framebuffer attachments
                             ..RenderPassBeginInfo::framebuffer(framebuffer)
                         },
-                        SubpassBeginInfo::default(),
+                        SubpassBeginInfo{
+                            contents: SubpassContents::Inline,
+                            ..Default::default()
+                        },
                     )
                     .unwrap()
                     .bind_pipeline_graphics(graphics_pipeline.clone())

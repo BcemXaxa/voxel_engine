@@ -61,7 +61,7 @@ impl Renderer {
                 image_color_space,
                 image_extent,
                 image_usage: ImageUsage::COLOR_ATTACHMENT,
-                image_sharing: Sharing::Exclusive, // FIXME: might not work because graphics_queue != present_queue
+                image_sharing: Sharing::Exclusive,
                 pre_transform: capabilities.current_transform,
                 ..Default::default()
             };
@@ -71,6 +71,19 @@ impl Renderer {
 
         let framebuffers = Self::create_framebuffers(swapchain.clone(), images, render_pass);
         (swapchain, framebuffers)
+    }
+    
+    fn get_image_views(images: Vec<Arc<Image>>) -> Vec<Arc<ImageView>> {
+        images
+            .into_iter()
+            .map(|image| {
+                // TODO: possibly incorrect
+                let create_info = ImageViewCreateInfo::from_image(&image);
+
+                // TODO: handle error
+                ImageView::new(image, create_info).unwrap()
+            })
+            .collect()
     }
 
     fn create_framebuffers(
@@ -88,19 +101,6 @@ impl Renderer {
                     ..Default::default()
                 };
                 Framebuffer::new(render_pass.clone(), create_info).unwrap() // TODO: handle error
-            })
-            .collect()
-    }
-
-    fn get_image_views(images: Vec<Arc<Image>>) -> Vec<Arc<ImageView>> {
-        images
-            .into_iter()
-            .map(|image| {
-                // TODO: possibly incorrect
-                let create_info = ImageViewCreateInfo::from_image(&image);
-
-                // TODO: handle error
-                ImageView::new(image, create_info).unwrap()
             })
             .collect()
     }

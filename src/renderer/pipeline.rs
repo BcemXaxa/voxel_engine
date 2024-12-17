@@ -67,7 +67,6 @@ impl Renderer {
 
         let input_assembly_state = InputAssemblyState {
             topology: PrimitiveTopology::TriangleList,
-            primitive_restart_enable: false,
             ..Default::default()
         };
 
@@ -96,7 +95,7 @@ impl Renderer {
             depth_clamp_enable: false,
             rasterizer_discard_enable: false, // TODO: maybe change later
             polygon_mode: PolygonMode::Fill,
-            cull_mode: CullMode::Back, // TODO: check if it is faster than other methods of backculling
+            cull_mode: CullMode::None, // TODO: check if it is faster than other methods of backculling
             front_face: FrontFace::CounterClockwise,
             depth_bias: None,
             line_width: 1.0,
@@ -112,6 +111,8 @@ impl Renderer {
 
         // TODO: maybe depth and stencil testing
 
+        let subpass = render_pass.first_subpass();
+
         let color_blend_attachment_state = ColorBlendAttachmentState {
             blend: Some(AttachmentBlend {
                 src_color_blend_factor: BlendFactor::One,
@@ -125,32 +126,35 @@ impl Renderer {
             color_write_mask: ColorComponents::all(),
         };
 
-        let color_blend_state = ColorBlendState {
-            attachments: vec![color_blend_attachment_state],
-            logic_op: None,
-            blend_constants: [0.0; 4],
-            flags: Default::default(),
-            ..Default::default()
-        };
+        let color_blend_state = ColorBlendState::with_attachment_states(
+            subpass.num_color_attachments(),
+            Default::default(),
+        );
+        // {
+        //     attachments: vec![color_blend_attachment_state],
+        //     logic_op: None,
+        //     blend_constants: [0.0; 4],
+        //     flags: Default::default(),
+        //     ..Default::default()
+        // };
 
         // TODO: handle error
         let pipeline_layout =
             PipelineLayout::new(device.clone(), PipelineLayoutCreateInfo::default()).unwrap();
 
         {
-            let mut create_info = GraphicsPipelineCreateInfo::layout(pipeline_layout);
-            create_info.stages.extend(pipeline_stages);
-            create_info.vertex_input_state = Some(vertex_input_state);
-            create_info.input_assembly_state = Some(input_assembly_state);
-            create_info.viewport_state = Some(viewport_state);
-            create_info.rasterization_state = Some(rasterization_state);
-            create_info.multisample_state = Some(multisample_state);
-            create_info.color_blend_state = Some(color_blend_state);
-            //create_info.dynamic_state.extend(dynamic_states);
-            create_info.subpass = Some(PipelineSubpassType::BeginRenderPass(
-                render_pass.first_subpass(),
-            ));
-            create_info.base_pipeline = None;
+            let mut create_info = GraphicsPipelineCreateInfo {
+                stages: pipeline_stages.into_iter().collect(),
+                vertex_input_state: Some(vertex_input_state),
+                input_assembly_state: Some(input_assembly_state),
+                viewport_state: Some(viewport_state),
+                rasterization_state: Some(rasterization_state),
+                multisample_state: Some(multisample_state),
+                color_blend_state: Some(color_blend_state),
+                //dynamic_state.extend(dynamic_states),
+                subpass: Some(subpass.into()),
+                ..GraphicsPipelineCreateInfo::layout(pipeline_layout)
+            };
             GraphicsPipeline::new(device.clone(), None, create_info)
         }
         .unwrap() // TODO: handle error
