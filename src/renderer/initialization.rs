@@ -19,8 +19,7 @@ use vulkano::{
     swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo},
     Version, VulkanLibrary,
 };
-
-use crate::messenger::window_renderer::WindowMessenger;
+use winit::window::{self, Window};
 
 use super::Renderer;
 
@@ -31,8 +30,7 @@ static LIBRARY: LazyLock<Arc<VulkanLibrary>> =
     LazyLock::new(|| VulkanLibrary::new().expect("Vulkan library is not supported"));
 
 impl Renderer {
-    pub fn new(window_msg: WindowMessenger) -> Self {
-        let (window, extensions) = window_msg.initial_receiver.recv().unwrap();
+    pub fn new(window: Arc<Window>, extensions: InstanceExtensions) -> Self {
 
         let instance_extensions = InstanceExtensions {
             ext_surface_maintenance1: true,
@@ -72,7 +70,6 @@ impl Renderer {
         );
 
         Self {
-            window_msg,
             window,
 
             instance,

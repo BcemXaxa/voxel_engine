@@ -3,20 +3,22 @@ use std::sync::{mpsc::TryRecvError, Arc};
 use drawing::DrawError;
 use initialization::Queues;
 use vulkano::{
-    command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer}, device::{physical::PhysicalDevice, Device, Queue}, instance::Instance, pipeline::GraphicsPipeline, render_pass::{Framebuffer, RenderPass}, swapchain::Swapchain
+    command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer},
+    device::{physical::PhysicalDevice, Device, Queue},
+    instance::Instance,
+    pipeline::GraphicsPipeline,
+    render_pass::{Framebuffer, RenderPass},
+    swapchain::Swapchain,
 };
 use winit::window::Window;
 
-use crate::messenger::window_renderer::WindowMessenger;
-
-mod initialization;
-mod swapchain;
-mod pipeline;
 mod command_buffer;
 mod drawing;
+mod initialization;
+mod pipeline;
+mod swapchain;
 
 pub struct Renderer {
-    window_msg: WindowMessenger,
     window: Arc<Window>,
 
     instance: Arc<Instance>,
@@ -34,31 +36,18 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn run(&mut self) {
-        loop {
-            match self.window_msg.run_receiver.try_recv() {
-                Err(err) => match err {
-                    TryRecvError::Empty => {
-                        if let Err(err) = self.draw_frame() {
-                            match err {
-                                DrawError::RecreationRequired => self.recreate(None),
-                                DrawError::AcquisitionFailed => panic!("Image acquisition failed"),
-                                DrawError::ExecutionFailed => panic!("Execution failed")
-                            }
-                        }
-                    }
-                    TryRecvError::Disconnected => break,
-                },
-                Ok(event) => match event {
-                    RendererIncomingEvent::ExtentChange(extent) => {
-                        self.recreate(Some(extent));
-                    }
-                },
-            }
+    pub fn draw(&mut self) {
+        match self.draw_frame() {
+            Ok(_) => {},
+            Err(err) => match err {
+                DrawError::RecreationRequired => println!("recreation"),
+                DrawError::AcquisitionFailed => println!("acquisiton"),
+                DrawError::ExecutionFailed => println!("execution"),
+            },
         }
     }
 
-    fn recreate(&mut self, extent: Option<[u32; 2]>) {
+    pub fn recreate(&mut self, extent: Option<[u32; 2]>) {
         let extent = match extent {
             Some(val) => val,
             None => self.window.inner_size().into(),

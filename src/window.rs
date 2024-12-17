@@ -10,7 +10,7 @@ use winit::{
 };
 use ApplicationEvent::*;
 
-use crate::{messenger::{window_interface::InterfaceMessenger, window_renderer::RendererMessenger}, renderer::RendererIncomingEvent};
+use crate::renderer::Renderer;
 
 #[derive(Debug)]
 pub enum ApplicationEvent {
@@ -19,22 +19,19 @@ pub enum ApplicationEvent {
 
 pub struct Application {
     window: Option<Arc<Window>>,
+    renderer: Option<Renderer>,
 
-    render_msg: RendererMessenger,
-    interface_msg: InterfaceMessenger,
-
-    event_loop: Option<EventLoop<ApplicationEvent>>,
+    event_loop: Option<EventLoop<ApplicationEvent>>, // TODO: probably unneccessary
     proxy: EventLoopProxy<ApplicationEvent>,
 }
 
 impl Application {
-    pub fn new(render_msg: RendererMessenger, interface_msg: InterfaceMessenger) -> Self {
+    pub fn new() -> Self {
         let event_loop = EventLoop::with_user_event().build().unwrap();
         let proxy = event_loop.create_proxy();
         Self {
-            render_msg,
-            interface_msg,
             proxy,
+            renderer: None,
             event_loop: Some(event_loop),
             window: None,
         }
@@ -54,11 +51,9 @@ impl ApplicationHandler<ApplicationEvent> for Application {
             .with_inner_size(LogicalSize::new(800, 600));
 
         let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-        
-        self.render_msg.init(event_loop, window.clone());
-        self.interface_msg.init(event_loop, window.clone());
 
-        self.window = Some(window);
+        self.window = Some(window.clone());
+        self.renderer = Some(Renderer::new(window, Surface::required_extensions(&event_loop)));
     }
 
     fn window_event(
@@ -75,11 +70,12 @@ impl ApplicationHandler<ApplicationEvent> for Application {
                 }
                 self.proxy.send_event(CloseFix).expect("Proxy send failed");
             }
+            RedrawRequested => {
+                println!("redraw");
+                self.renderer.as_mut().unwrap().recreate(None);
+                self.renderer.as_mut().unwrap().draw();
+            }
             _ => {
-                self.render_msg
-                    .window_event(event_loop, window, event.clone());
-                self.interface_msg
-                    .window_event(event_loop, window, event);
             }
         }
     }
@@ -88,32 +84,5 @@ impl ApplicationHandler<ApplicationEvent> for Application {
             CloseFix => event_loop.exit(),
             _ => (),
         }
-    }
-}
-
-pub trait WindowEventHandler {
-    fn init(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>) {}
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window: &Window, event: WindowEvent);
-}
-
-impl WindowEventHandler for RendererMessenger {
-    fn init(&mut self, event_loop: &ActiveEventLoop, window: Arc<Window>) {
-        self.initial_sender.send((window, Surface::required_extensions(&event_loop))).unwrap();
-    }
-
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window: &Window, event: WindowEvent) {
-        match event {
-            Resized(physical_size) => {
-                let extent = physical_size.into();
-                self.run_sender.send(RendererIncomingEvent::ExtentChange(extent));
-            },
-            _ => (),
-        }
-    }
-}
-
-impl WindowEventHandler for InterfaceMessenger {
-    fn window_event(&mut self, event_loop: &ActiveEventLoop, window: &Window, event: WindowEvent) {
-        
     }
 }
