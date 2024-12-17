@@ -1,7 +1,7 @@
 use std::sync::{mpsc::TryRecvError, Arc};
 
 use drawing::DrawError;
-use initialization::Queues;
+use queue::Queues;
 use vulkano::{
     command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer},
     device::{physical::PhysicalDevice, Device, Queue},
@@ -17,6 +17,10 @@ mod drawing;
 mod initialization;
 mod pipeline;
 mod swapchain;
+mod queue;
+mod render_pass;
+mod physical_device;
+mod logical_device;
 
 pub struct Renderer {
     window: Arc<Window>,
