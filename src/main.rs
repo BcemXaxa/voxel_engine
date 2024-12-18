@@ -11,7 +11,6 @@ use renderer::Renderer;
 use window::{Application};
 
 fn main() {
-
     Application::new()
     .run();
 }

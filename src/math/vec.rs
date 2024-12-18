@@ -1,27 +1,118 @@
+//##########################//
+//###### DECLARATION #######//
+//##########################//
+
 pub type VecN<const N: usize> = [f32; N];
 pub type Vec2 = VecN<2>;
 pub type Vec3 = VecN<3>;
 pub type Vec4 = VecN<4>;
 
-trait DotProd {
-    fn dot(&self, other: &Self) -> f32;
+//##########################//
+//######### TRAITS #########//
+//##########################//
+
+pub trait VecDefault {
+    fn zero() -> Self;
+    fn basis() -> Self;
+    fn fill(val: f32) -> Self;
+}
+pub trait VecAdd {
+    fn add(self, other: Self) -> Self;
 }
 
-impl DotProd for [f32] {
-    fn dot(&self, other: &Self) -> f32 {
-        self.into_iter()
-            .enumerate()
-            .map(|(i, this)| this * other[i])
-            .sum()
+pub trait VecSub {
+    fn sub(self, other: Self) -> Self;
+}
+
+pub trait VecMult: Sized {
+    fn mult(self, k: f32) -> Self;
+    fn div(self, k: f32) -> Self {
+        if k.is_normal() {
+            self.mult(1.0 / k)
+        } else {
+            self
+        }
+    }
+}
+pub trait VecLen {
+    fn len(&self) -> f32 {
+        self.len2().sqrt()
+    }
+    // len squared
+    fn len2(&self) -> f32;
+}
+pub trait VecNorm: VecLen + VecMult {
+    fn norm(self) -> Self {
+        let len = self.len();
+        self.div(len)
     }
 }
 
-trait CrossProd {
-    fn cross(&self, other: &Self) -> Self;
+pub trait DotProd {
+    fn dot(self, other: Self) -> f32;
 }
 
+pub trait CrossProd {
+    fn cross(self, other: Self) -> Self;
+}
+
+//##########################//
+//##### IMPLEMENTATION #####//
+//##########################//
+
+impl<const N: usize> VecDefault for VecN<N> {
+    fn zero() -> Self {
+        [0.0; N]
+    }
+
+    fn basis() -> Self {
+        [1.0; N]
+    }
+
+    fn fill(val: f32) -> Self {
+        [val; N]
+    }
+}
+
+impl<const N: usize> VecAdd for VecN<N> {
+    fn add(self, other: Self) -> Self {
+        let mut sum = VecN::zero();
+        self.into_iter()
+            .zip(other)
+            .enumerate()
+            .for_each(|(i, (left, right))| sum[i] = left + right);
+        sum
+    }
+}
+
+impl<const N: usize> VecSub for VecN<N> {
+    fn sub(self, other: Self) -> Self {
+        let mut sum = VecN::zero();
+        self.into_iter()
+            .zip(other)
+            .enumerate()
+            .for_each(|(i, (left, right))| sum[i] = left - right);
+        sum
+    }
+}
+
+impl<const N: usize> VecMult for VecN<N> {
+    fn mult(mut self, k: f32) -> Self {
+        self.iter_mut().for_each(|comp| *comp *= k);
+        self
+    }
+}
+
+impl<const N: usize> VecLen for VecN<N> {
+    fn len2(&self) -> f32 {
+        self.into_iter().map(|comp| comp * comp).sum()
+    }
+}
+
+impl<const N: usize> VecNorm for VecN<N> {}
+
 impl CrossProd for Vec3 {
-    fn cross(&self, other: &Self) -> Self {
+    fn cross(self, other: Self) -> Self {
         [
             self[1] * other[2] - self[2] * other[1],
             self[2] * other[0] - self[0] * other[2],
@@ -30,74 +121,55 @@ impl CrossProd for Vec3 {
     }
 }
 
-trait Norm<const N: usize>: Sized + Clone {
-    fn norm(&mut self);
-    fn normed(&self) -> Self {
-        let mut new = self.clone();
-        new.norm();
-        new
+impl<const N: usize> DotProd for VecN<N> {
+    fn dot(self, other: Self) -> f32 {
+        self.into_iter()
+            .zip(other)
+            .map(|(left, right)| left * right)
+            .sum()
     }
 }
 
-impl<const N: usize> Norm<N> for [f32; N] {
-    fn norm(&mut self) {
-        let v_len = self.v_len();
-        if v_len.is_normal() {
-            self.into_iter().for_each(|comp| *comp /= v_len);
-        }
-    }
-}
-
-trait VecLen {
-    fn v_len(&self) -> f32 {
-        self.v_len2().sqrt()
-    }
-    // len squared
-    fn v_len2(&self) -> f32;
-}
-
-impl VecLen for [f32] {
-    fn v_len2(&self) -> f32 {
-        self.into_iter().map(|comp| comp * comp).sum()
-    }
-}
+//##########################//
+//######### TESTS ##########//
+//##########################//
 
 mod vec_tests {
     use std::f32::EPSILON;
 
-    use crate::math::vec::{DotProd, Norm, Vec3, Vec4, VecLen};
+    use crate::math::vec::*;
 
-    use super::{CrossProd, Vec2};
+    
 
     #[test]
     fn test_norm_len() {
         let pos: Vec2 = [10.0, 0.0];
-        assert!((pos.normed().v_len() - 1.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 1.0).abs() <= EPSILON);
 
         let pos: Vec2 = [789.178, 999999.1];
-        assert!((pos.normed().v_len() - 1.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 1.0).abs() <= EPSILON);
 
         let pos: Vec2 = [-141.26, -1512.15625];
-        assert!((pos.normed().v_len() - 1.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 1.0).abs() <= EPSILON);
 
         let pos: Vec2 = [0.0, 0.0];
-        assert!((pos.normed().v_len() - 0.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 0.0).abs() <= EPSILON);
 
         let pos: Vec3 = [-141.26, -1512.15625, 5250.2523];
-        assert!((pos.normed().v_len() - 1.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 1.0).abs() <= EPSILON);
 
         let pos: Vec4 = [-141.26, -1512.15625, 5250.2523, -2345.4];
-        assert!((pos.normed().v_len() - 1.0).abs() <= EPSILON);
+        assert!((pos.norm().len() - 1.0).abs() <= EPSILON);
     }
 
     #[test]
     fn test_norm() {
         let mut pos1: Vec2 = [54.0, -74.0];
-        let pos2: Vec2 = pos1.normed();
+        let pos2: Vec2 = pos1.norm();
         assert_eq!(pos1, [54.0, -74.0]);
-        pos1.norm();
+        pos1 = pos1.norm();
         assert_eq!(pos1, pos2);
-        let pos3: Vec2 = pos1.clone();
+        let pos3: Vec2 = pos1;
         assert_eq!(pos2, pos3);
     }
 
@@ -107,14 +179,23 @@ mod vec_tests {
         let vec2: Vec3 = [8.0, -1.5, -5.0];
 
         let dot = 10.0 * 8.0 + 1.5 * 67.0 - 5.0 * 23.0;
-        assert_eq!(dot, vec1.dot(&vec2));
+        assert_eq!(dot, vec1.dot(vec2));
     }
 
     #[test]
     fn test_cross_prod() {
         let vec1: Vec3 = [8.0, 0.0, 0.0];
         let vec2: Vec3 = [0.0, 0.0, -1.5];
-        let cross = vec1.cross(&vec2).normed();
+        let cross = vec1.cross(vec2).norm();
         assert_eq!([0.0, 1.0, 0.0], cross);
+    }
+
+    #[test]
+    fn test_add_sub() {
+        let arr1 = Vec2::basis();
+        let arr2 = Vec2::basis();
+
+        assert_eq!(arr1.add(arr2), Vec2::basis().mult(2.0));
+        assert_eq!(arr1.sub(arr2), Vec2::zero())
     }
 }
