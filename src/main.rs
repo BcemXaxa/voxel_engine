@@ -1,9 +1,9 @@
 #![allow(unused)]
 
-mod for_multi;
 mod renderer;
 mod shaders;
 mod window;
+mod math;
 
 use std::{sync::mpsc, thread, time::Duration};
 
