@@ -43,7 +43,7 @@ impl Renderer {
         // TODO: handle error
         let vertex_shader = shaders::default_vertex_shader::load(device.clone()).unwrap();
         // TODO: handle error
-        let fragment_shader = shaders::default_fragment_shader::load(device.clone()).unwrap();
+        let fragment_shader = shaders::funny_fragment_shader::load(device.clone()).unwrap();
 
         let pipeline_stages = [
             {

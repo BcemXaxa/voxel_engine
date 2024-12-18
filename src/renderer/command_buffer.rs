@@ -54,7 +54,7 @@ impl Renderer {
                     // .unwrap()
                     // .set_scissor(0, Default::default())
                     // .unwrap()
-                    .draw(3, 1, 0, 0) // FIXME: hardcoded
+                    .draw(6, 1, 0, 0) // FIXME: hardcoded
                     .unwrap()
                     .end_render_pass(SubpassEndInfo::default())
                     .unwrap();
