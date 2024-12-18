@@ -76,23 +76,23 @@ impl<const N: usize> VecDefault for VecN<N> {
 
 impl<const N: usize> VecAdd for VecN<N> {
     fn add(self, other: Self) -> Self {
-        let mut sum = VecN::zero();
+        let mut out = VecN::zero();
         self.into_iter()
             .zip(other)
             .enumerate()
-            .for_each(|(i, (left, right))| sum[i] = left + right);
-        sum
+            .for_each(|(i, (left, right))| out[i] = left + right);
+        out
     }
 }
 
 impl<const N: usize> VecSub for VecN<N> {
     fn sub(self, other: Self) -> Self {
-        let mut sum = VecN::zero();
+        let mut out = VecN::zero();
         self.into_iter()
             .zip(other)
             .enumerate()
-            .for_each(|(i, (left, right))| sum[i] = left - right);
-        sum
+            .for_each(|(i, (left, right))| out[i] = left - right);
+        out
     }
 }
 
