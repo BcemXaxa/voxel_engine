@@ -4,6 +4,8 @@ mod renderer;
 mod shaders;
 mod window;
 mod math;
+mod logic;
+mod utility;
 
 use std::{sync::mpsc, thread, time::Duration};
 
