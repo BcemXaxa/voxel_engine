@@ -14,7 +14,7 @@ use vulkano::{
                 CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
             },
             subpass::PipelineSubpassType,
-            vertex_input::VertexInputState,
+            vertex_input::{Vertex, VertexDefinition, VertexInputState},
             viewport::{Scissor, Viewport, ViewportState},
             GraphicsPipelineCreateInfo,
         },
@@ -26,7 +26,7 @@ use vulkano::{
 
 use crate::shaders;
 
-use super::Renderer;
+use super::{vertex_buffer::MyVertex, Renderer};
 
 impl Renderer {
     pub(super) fn recreate_graphics_pipeline(&mut self, extent: [u32; 2]) {
@@ -41,29 +41,27 @@ impl Renderer {
         extent: [u32; 2],
     ) -> Arc<GraphicsPipeline> {
         // TODO: handle error
-        let vertex_shader = shaders::default_vertex_shader::load(device.clone()).unwrap();
+        let vertex_shader = shaders::default_vertex_shader::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
         // TODO: handle error
-        let fragment_shader = shaders::funny_fragment_shader::load(device.clone()).unwrap();
+        let fragment_shader = shaders::default_fragment_shader::load(device.clone())
+            .unwrap()
+            .entry_point("main")
+            .unwrap();
+
+        let vertex_input_state = MyVertex::per_vertex()
+            .definition(&vertex_shader.info().input_interface)
+            .unwrap();
 
         let pipeline_stages = [
-            {
-                // TODO: handle error
-                let entry_point = vertex_shader.entry_point("main").unwrap();
-                PipelineShaderStageCreateInfo::new(entry_point)
-            },
-            {
-                // TODO: handle error
-                let entry_point = fragment_shader.entry_point("main").unwrap();
-                PipelineShaderStageCreateInfo::new(entry_point)
-            },
+            PipelineShaderStageCreateInfo::new(vertex_shader),
+            PipelineShaderStageCreateInfo::new(fragment_shader),
         ];
 
         let dynamic_states = [DynamicState::Viewport, DynamicState::Scissor];
-
-        // TODO: real vertex input state
-        let vertex_input_state = VertexInputState {
-            ..Default::default()
-        };
 
         let input_assembly_state = InputAssemblyState {
             topology: PrimitiveTopology::TriangleList,
@@ -95,7 +93,7 @@ impl Renderer {
             depth_clamp_enable: false,
             rasterizer_discard_enable: false, // TODO: maybe change later
             polygon_mode: PolygonMode::Fill,
-            cull_mode: CullMode::None, // TODO: check if it is faster than other methods of backculling
+            cull_mode: CullMode::Back, // TODO: check if it is faster than other methods of backculling
             front_face: FrontFace::CounterClockwise,
             depth_bias: None,
             line_width: 1.0,

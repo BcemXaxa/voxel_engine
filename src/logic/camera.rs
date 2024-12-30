@@ -1,9 +1,17 @@
-use crate::math::vec::Vec3;
+use crate::math::{mat::Mat4x4, vec::Vec3};
+
+pub trait Camera {
+    fn view_matrix() -> Mat4x4;
+}
 
 type Angle = f32;
 
-pub struct Camera {
+pub struct RotorCamera {
     pos: Vec3,
-    dir: Vec3,
-    fov: Angle,
+
+}
+
+pub struct DirectionalCamera {
+    pos: Vec3,
+    target: Vec3,
 }

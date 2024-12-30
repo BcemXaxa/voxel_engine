@@ -2,13 +2,9 @@ use std::sync::{mpsc::TryRecvError, Arc};
 
 use drawing::DrawError;
 use queue::Queues;
+use vertex_buffer::MyVertex;
 use vulkano::{
-    command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer},
-    device::{physical::PhysicalDevice, Device, Queue},
-    instance::Instance,
-    pipeline::GraphicsPipeline,
-    render_pass::{Framebuffer, RenderPass},
-    swapchain::Swapchain,
+    buffer::Subbuffer, command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer}, device::{physical::PhysicalDevice, Device, Queue}, instance::Instance, memory::allocator::StandardMemoryAllocator, pipeline::GraphicsPipeline, render_pass::{Framebuffer, RenderPass}, swapchain::Swapchain
 };
 use winit::window::Window;
 
@@ -21,6 +17,7 @@ mod queue;
 mod render_pass;
 mod physical_device;
 mod logical_device;
+mod vertex_buffer;
 
 pub struct Renderer {
     window: Arc<Window>,
@@ -37,6 +34,9 @@ pub struct Renderer {
 
     command_buffer_allocator: Arc<StandardCommandBufferAllocator>,
     command_buffers: Vec<(Arc<PrimaryAutoCommandBuffer>, Arc<Queue>)>,
+
+    memory_allocator: Arc<StandardMemoryAllocator>,
+    vertex_buffer: Subbuffer<[MyVertex]>,
 }
 
 impl Renderer {

@@ -3,25 +3,20 @@ use std::sync::{Arc, LazyLock};
 use vulkano::{
     command_buffer::allocator::{
         StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
-    },
-    device::{
+    }, device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo,
         QueueFamilyProperties, QueueFlags,
-    },
-    format::Format,
-    image::{ImageLayout, SampleCount},
-    instance::{Instance, InstanceCreateInfo, InstanceExtensions},
-    render_pass::{
+    }, format::Format, image::{ImageLayout, SampleCount}, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator}, render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         RenderPass, RenderPassCreateInfo, SubpassDescription,
-    },
-    swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo},
-    Version, VulkanLibrary,
+    }, swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo}, Version, VulkanLibrary
 };
 use winit::window::{self, Window};
 
-use super::Renderer;
+use crate::renderer::vertex_buffer::MyVertex;
+
+use super::{vertex_buffer, Renderer};
 
 // FIXME: possible memory leak
 // static members don't call "Drop" on program termination,
@@ -61,13 +56,24 @@ impl Renderer {
             surface_properties.image_extent,
         );
 
+        let memory_allocator = Self::create_memory_allocator(device.clone());
+        let vertex_buffer = Self::create_vertex_buffer(memory_allocator.clone(), {
+            vec![
+                MyVertex{ pos: [-0.5, -0.5], color: [1.0, 1.0, 1.0, 1.0] },
+                MyVertex{ pos: [-0.5, 0.5], color: [1.0, 1.0, 1.0, 1.0] },
+                MyVertex{ pos: [0.5, 0.0], color: [1.0, 1.0, 1.0, 1.0] },
+            ]
+        });
+
         let command_buffer_allocator = Self::create_command_buffer_allocator(device.clone());
         let command_buffers = Self::write_command_buffers(
             &command_buffer_allocator,
             queues.graphics_present().unwrap(),
             framebuffers.clone(),
             graphics_pipeline.clone(),
+            vertex_buffer.clone()
         );
+
 
         Self {
             window,
@@ -84,6 +90,9 @@ impl Renderer {
 
             command_buffer_allocator,
             command_buffers,
+
+            memory_allocator,
+            vertex_buffer,
         }
     }
 
@@ -162,6 +171,10 @@ impl Renderer {
             device.clone(),
             create_info,
         ))
+    }
+
+    fn create_memory_allocator(device: Arc<Device>)->Arc<StandardMemoryAllocator> {
+        Arc::new(StandardMemoryAllocator::new_default(device))
     }
 }
 

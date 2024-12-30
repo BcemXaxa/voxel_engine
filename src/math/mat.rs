@@ -35,8 +35,6 @@ pub trait MatMult<R, O> {
     fn mult(self, other: R) -> O;
 }
 
-pub trait MatDet {} // TODO: determinant
-
 //##########################//
 //##### IMPLEMENTATION #####//
 //##########################//
