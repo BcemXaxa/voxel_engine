@@ -3,18 +3,26 @@ use std::sync::{Arc, LazyLock};
 use vulkano::{
     command_buffer::allocator::{
         StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
-    }, device::{
+    },
+    device::{
         physical::{PhysicalDevice, PhysicalDeviceType},
         Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo,
         QueueFamilyProperties, QueueFlags,
-    }, format::Format, image::{ImageLayout, SampleCount}, instance::{Instance, InstanceCreateInfo, InstanceExtensions}, memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator}, render_pass::{
+    },
+    format::Format,
+    image::{ImageLayout, SampleCount},
+    instance::{Instance, InstanceCreateInfo, InstanceExtensions},
+    memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator},
+    render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         RenderPass, RenderPassCreateInfo, SubpassDescription,
-    }, swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo}, Version, VulkanLibrary
+    },
+    swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo},
+    Version, VulkanLibrary,
 };
 use winit::window::{self, Window};
 
-use crate::renderer::vertex_buffer::MyVertex;
+use crate::modules::renderer::vertex_buffer::MyVertex;
 
 use super::{vertex_buffer, Renderer};
 
@@ -26,7 +34,6 @@ static LIBRARY: LazyLock<Arc<VulkanLibrary>> =
 
 impl Renderer {
     pub fn new(window: Arc<Window>, extensions: InstanceExtensions) -> Self {
-
         let instance_extensions = InstanceExtensions {
             ext_surface_maintenance1: true,
             ..extensions
@@ -59,9 +66,18 @@ impl Renderer {
         let memory_allocator = Self::create_memory_allocator(device.clone());
         let vertex_buffer = Self::create_vertex_buffer(memory_allocator.clone(), {
             vec![
-                MyVertex{ pos: [-0.5, -0.5], color: [1.0, 1.0, 1.0, 1.0] },
-                MyVertex{ pos: [-0.5, 0.5], color: [1.0, 1.0, 1.0, 1.0] },
-                MyVertex{ pos: [0.5, 0.0], color: [1.0, 1.0, 1.0, 1.0] },
+                MyVertex {
+                    pos: [-0.5, -0.5],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                MyVertex {
+                    pos: [-0.5, 0.5],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
+                MyVertex {
+                    pos: [0.5, 0.0],
+                    color: [1.0, 1.0, 1.0, 1.0],
+                },
             ]
         });
 
@@ -71,9 +87,8 @@ impl Renderer {
             queues.graphics_present().unwrap(),
             framebuffers.clone(),
             graphics_pipeline.clone(),
-            vertex_buffer.clone()
+            vertex_buffer.clone(),
         );
-
 
         Self {
             window,
@@ -173,7 +188,7 @@ impl Renderer {
         ))
     }
 
-    fn create_memory_allocator(device: Arc<Device>)->Arc<StandardMemoryAllocator> {
+    fn create_memory_allocator(device: Arc<Device>) -> Arc<StandardMemoryAllocator> {
         Arc::new(StandardMemoryAllocator::new_default(device))
     }
 }

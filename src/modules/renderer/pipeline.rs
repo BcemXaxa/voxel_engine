@@ -24,7 +24,7 @@ use vulkano::{
     render_pass::RenderPass,
 };
 
-use crate::shaders;
+use crate::modules::shaders;
 
 use super::{vertex_buffer::MyVertex, Renderer};
 
@@ -91,7 +91,7 @@ impl Renderer {
 
         let rasterization_state = RasterizationState {
             depth_clamp_enable: false,
-            rasterizer_discard_enable: false, // TODO: maybe change later
+            rasterizer_discard_enable: false,
             polygon_mode: PolygonMode::Fill,
             cull_mode: CullMode::Back, // TODO: check if it is faster than other methods of backculling
             front_face: FrontFace::CounterClockwise,

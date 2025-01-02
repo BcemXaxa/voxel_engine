@@ -1,13 +1,3 @@
-use std::sync::{mpsc::TryRecvError, Arc};
-
-use drawing::DrawError;
-use queue::Queues;
-use vertex_buffer::MyVertex;
-use vulkano::{
-    buffer::Subbuffer, command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer}, device::{physical::PhysicalDevice, Device, Queue}, instance::Instance, memory::allocator::StandardMemoryAllocator, pipeline::GraphicsPipeline, render_pass::{Framebuffer, RenderPass}, swapchain::Swapchain
-};
-use winit::window::Window;
-
 mod command_buffer;
 mod drawing;
 mod initialization;
@@ -17,7 +7,17 @@ mod queue;
 mod render_pass;
 mod physical_device;
 mod logical_device;
-mod vertex_buffer;
+pub mod vertex_buffer;
+
+use std::sync::{mpsc::TryRecvError, Arc};
+
+use drawing::DrawError;
+use queue::Queues;
+use vertex_buffer::MyVertex;
+use vulkano::{
+    buffer::Subbuffer, command_buffer::{allocator::StandardCommandBufferAllocator, PrimaryAutoCommandBuffer}, device::{physical::PhysicalDevice, Device, Queue}, instance::Instance, memory::allocator::StandardMemoryAllocator, pipeline::GraphicsPipeline, render_pass::{Framebuffer, RenderPass}, swapchain::Swapchain
+};
+use winit::window::Window;
 
 pub struct Renderer {
     window: Arc<Window>,

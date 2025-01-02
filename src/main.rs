@@ -1,18 +1,12 @@
 #![allow(unused)]
 
-mod renderer;
-mod shaders;
-mod window;
-mod math;
-mod logic;
-mod utility;
+mod modules;
 
 use std::{sync::mpsc, thread, time::Duration};
 
-use renderer::Renderer;
-use window::{Application};
+use modules::renderer::Renderer;
+use modules::window::Application;
 
 fn main() {
-    Application::new()
-    .run();
+    Application::new().run();
 }

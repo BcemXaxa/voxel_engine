@@ -5,12 +5,12 @@ use winit::{
     application::ApplicationHandler,
     dpi::LogicalSize,
     event::WindowEvent::{self, *},
-    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
     window::{Window, WindowAttributes, WindowId},
 };
 use ApplicationEvent::*;
 
-use crate::renderer::Renderer;
+use crate::modules::renderer::Renderer;
 
 #[derive(Debug)]
 pub enum ApplicationEvent {
@@ -28,6 +28,7 @@ pub struct Application {
 impl Application {
     pub fn new() -> Self {
         let event_loop = EventLoop::with_user_event().build().unwrap();
+        event_loop.set_control_flow(ControlFlow::Poll);
         let proxy = event_loop.create_proxy();
         Self {
             proxy,

@@ -122,7 +122,7 @@ impl<const N: usize, const X: usize, const M: usize> MatMult<MatNM<X, M>, MatNM<
 //##########################//
 
 mod matrix_tests {
-    use crate::math::mat::*;
+    use crate::modules::math::mat::*;
     #[test]
     fn test_matrix_mult() {
         let m1: MatNM<2, 4> = [[10.0, 0.0, 10.0, 5.0], [10.0, 0.0, 10.0, 5.0]];
