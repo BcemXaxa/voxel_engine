@@ -9,11 +9,12 @@ mod math {
     pub mod quaternion;
     pub mod cg;
 }
-mod logic {
+pub mod logic {
     mod scene;
-    mod camera;
+    pub mod camera;
     mod chunk;
     mod light;
+    pub mod controller;
 }
 mod utility {
     pub mod benchmark;

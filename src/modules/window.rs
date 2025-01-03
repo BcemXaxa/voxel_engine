@@ -1,88 +1,98 @@
-use std::sync::{mpsc::Sender, Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{self, mpsc::{self, Sender}, Arc},
+};
 
 use vulkano::{instance::InstanceExtensions, swapchain::Surface};
 use winit::{
-    application::ApplicationHandler,
-    dpi::LogicalSize,
-    event::WindowEvent::{self, *},
-    event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy},
-    window::{Window, WindowAttributes, WindowId},
+    application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent::{self, *}, event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}, platform::run_on_demand::EventLoopExtRunOnDemand, window::{self, Window, WindowAttributes, WindowId}
 };
-use ApplicationEvent::*;
 
 use crate::modules::renderer::Renderer;
 
-#[derive(Debug)]
-pub enum ApplicationEvent {
-    CloseFix,
+pub enum CustomEvent {
+    Exit,
+    CreateWindow(WindowAttributes, Sender<Arc<Window>>, Sender<WindowEvent>),
 }
 
-pub struct Application {
-    window: Option<Arc<Window>>,
-    renderer: Option<Renderer>,
-
-    event_loop: Option<EventLoop<ApplicationEvent>>, // TODO: probably unneccessary
-    proxy: EventLoopProxy<ApplicationEvent>,
+pub struct WindowManagerBuilder {
+    event_loop: EventLoop<CustomEvent>,
 }
-
-impl Application {
-    pub fn new() -> Self {
+impl Default for WindowManagerBuilder {
+    fn default() -> Self {
         let event_loop = EventLoop::with_user_event().build().unwrap();
-        event_loop.set_control_flow(ControlFlow::Poll);
-        let proxy = event_loop.create_proxy();
-        Self {
-            proxy,
-            renderer: None,
-            event_loop: Some(event_loop),
-            window: None,
-        }
+        
+        Self { event_loop }
     }
-    pub fn run(mut self) {
-        let event_loop = self.event_loop.take().unwrap();
-        event_loop
-            .run_app(&mut self)
-            .expect("Window application result");
+}
+impl WindowManagerBuilder {
+    pub fn build_and_run(self) {
+        let mut window_manager = WindowManager {
+            windows: HashMap::new(),
+            local_proxy: self.event_loop.create_proxy(),
+        };
+        self.event_loop.run_app(&mut window_manager).unwrap();
+    }
+
+    pub fn event_loop_proxy(&self) -> EventLoopProxy<CustomEvent> {
+        self.event_loop.create_proxy()
+    }
+
+    pub fn event_loop(&self) -> &EventLoop<CustomEvent> {
+        &self.event_loop
     }
 }
 
-impl ApplicationHandler<ApplicationEvent> for Application {
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let window_attributes = WindowAttributes::default()
-            .with_title("title")
-            .with_inner_size(LogicalSize::new(800, 600));
+pub struct WindowManager {
+    windows: HashMap<WindowId, (Arc<Window>, Sender<WindowEvent>)>,
+    local_proxy: EventLoopProxy<CustomEvent>,
+}
 
-        let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
-
-        self.window = Some(window.clone());
-        self.renderer = Some(Renderer::new(window, Surface::required_extensions(&event_loop)));
-    }
-
+impl ApplicationHandler<CustomEvent> for WindowManager {
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        let window = self.window.as_ref().unwrap();
         match event {
             CloseRequested => {
-                if let Some(false) = window.is_visible() {
-                    window.set_visible(true);
+                if let Some((window, _)) = self.windows.get(&window_id) {
+                    if let Some(false) = window.is_visible() {
+                        window.set_visible(true);
+                    }
                 }
-                self.proxy.send_event(CloseFix).expect("Proxy send failed");
             }
-            RedrawRequested => {
-                self.renderer.as_mut().unwrap().recreate(None);
-                self.renderer.as_mut().unwrap().draw();
+            Destroyed => {
+                self.windows.remove(&window_id);
+                if (self.windows.is_empty()){
+                    self.local_proxy.send_event(CustomEvent::Exit);
+                }
             }
-            _ => {
+            _ => ()
+        }
+
+        if let Some((_, sender)) = self.windows.get(&window_id) {
+            // Send event
+            // Destroy window if no receiver
+            if sender.send(event).is_err() {
+                self.windows.remove(&window_id);
             }
         }
     }
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: ApplicationEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: CustomEvent) {
+        use CustomEvent::*;
         match event {
-            CloseFix => event_loop.exit(),
-            _ => (),
+            Exit => event_loop.exit(),
+            CreateWindow(window_attributes, window_sender, event_sender) => {
+                let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
+                window_sender.send(window.clone());
+                self.windows.insert(window.id(), (window, event_sender));
+            },
         }
+    }
+    
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // no need
     }
 }

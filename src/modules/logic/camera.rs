@@ -21,8 +21,8 @@ impl Camera for OrientedCamera {
 }
 
 pub struct TrackingCamera {
-    pos: Vec3,
-    target: Vec3,
+    pub pos: Vec3,
+    pub target: Vec3,
 }
 
 impl Camera for TrackingCamera {

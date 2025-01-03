@@ -25,10 +25,10 @@ pub trait Frustum {
 }
 
 pub struct PerspectiveFrustum {
-    near: f32,
-    far: f32,
-    fov: f32,
-    ar: f32,
+    pub near: f32,
+    pub far: f32,
+    pub fov: f32,
+    pub ar: f32,
 }
 
 impl Frustum for PerspectiveFrustum {

@@ -40,9 +40,9 @@ pub struct Renderer {
 }
 
 impl Renderer {
-    pub fn draw(&mut self) {
+    pub fn draw(&self) {
         match self.draw_frame() {
-            Ok(_) => {},
+        Ok(_) => {},
             Err(err) => match err {
                 DrawError::RecreationRequired => println!("recreation"),
                 DrawError::AcquisitionFailed => println!("acquisiton"),

@@ -8,7 +8,7 @@ use vulkano::{
 use super::Renderer;
 
 impl Renderer {
-    pub(super) fn draw_frame(&mut self) -> Result<(), DrawError> {
+    pub(super) fn draw_frame(&self) -> Result<(), DrawError> {
         let acquire = swapchain::acquire_next_image(self.swapchain.clone(), None);
 
         let (image_i, _, acquire_future) = match acquire.map_err(Validated::unwrap) {
