@@ -77,12 +77,12 @@ impl Renderer {
             .collect()
     }
 
-    pub fn create_framebuffer(&self, image_i: usize, render_pass: Arc<RenderPass>) -> Arc<Framebuffer> {
+    pub fn create_framebuffer(&self, image_i: u32, render_pass: Arc<RenderPass>) -> Arc<Framebuffer> {
         // TODO(optimize): framebuffer creation
         // this implementation means we create framebuffer for each render pass every frame
         // which (I guess) is not performant
         let create_info = FramebufferCreateInfo {
-            attachments: vec![self.swapchain_images.get(image_i).unwrap().1.clone()],
+            attachments: vec![self.swapchain_images.get(image_i as usize).unwrap().1.clone()],
             extent: self.swapchain.image_extent(),
             ..Default::default()
         };

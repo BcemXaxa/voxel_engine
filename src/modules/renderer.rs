@@ -2,7 +2,6 @@ pub mod initialization;
 pub mod allocations;
 mod drawing;
 mod command_buffer;
-mod pipeline;
 mod swapchain;
 pub mod queue;
 mod render_pass;

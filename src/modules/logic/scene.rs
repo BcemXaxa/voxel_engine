@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
-use crate::modules::{
-    math::{
+use crate::modules::math::{
         cg::{Frustum, PerspectiveFrustum},
         mat::{Mat4x4, MatMult},
-    },
-    renderer::vertex_buffer::MyVertex,
-};
+    };
 
 use super::{
     camera::{Camera, TrackingCamera},

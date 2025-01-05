@@ -1,20 +1,16 @@
 use std::sync::Arc;
 
 use vulkano::{
-    command_buffer::PrimaryAutoCommandBuffer,
-    swapchain::{self, SwapchainPresentInfo},
-    sync::{self, GpuFuture},
-    Validated, VulkanError,
+    command_buffer::PrimaryAutoCommandBuffer, render_pass::{Framebuffer, RenderPass}, swapchain::{self, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError
 };
 
 use super::{queue::QueueType, Renderer};
 
 impl Renderer {
-    pub fn execute_then_present(
-        &self,
-        command_buffer: Arc<PrimaryAutoCommandBuffer>,
-        queue_type: QueueType,
-    ) -> Result<(), DrawError> {
+    pub fn execute_then_present<F>(&self, render_passes: Vec<Arc<RenderPass>>, command_buffer: F) -> Result<(), DrawError>
+    where
+        F: FnOnce(Vec<Arc<Framebuffer>>) -> Arc<PrimaryAutoCommandBuffer>,
+    {
         let acquire = swapchain::acquire_next_image(self.swapchain.clone(), None);
 
         let (image_i, _, acquire_future) = match acquire.map_err(Validated::unwrap) {
@@ -25,10 +21,14 @@ impl Renderer {
             _ => return Err(DrawError::AcquisitionFailed),
         };
 
-        let queue = self.queues.get(queue_type).unwrap();
+        let framebuffers = render_passes.into_iter().map(|render_pass| {
+            self.create_framebuffer(image_i, render_pass)
+        }).collect();
+        
+        let queue = self.queues.get(QueueType::GraphicsPresent).unwrap();
         let execution = sync::now(self.device.clone())
             .join(acquire_future)
-            .then_execute(queue.clone(), command_buffer)
+            .then_execute(queue.clone(), command_buffer(framebuffers))
             .unwrap()
             .then_swapchain_present(
                 queue,

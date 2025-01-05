@@ -5,7 +5,7 @@ use std::{
 
 use winit::{event::WindowEvent, window::Window};
 
-use crate::modules::renderer::{queue::QueueType, Renderer};
+use crate::modules::renderer::Renderer;
 
 use super::scene::Scene;
 
@@ -28,12 +28,9 @@ impl Controller {
 
     pub fn main_loop(&mut self) {
         let frame_duration = Duration::from_secs_f32(1.0 / 60.0);
+        let mut last_frame = Instant::now();
 
-        let mut last = Instant::now() - frame_duration;
         'main: loop {
-            let mut swapchain_recreate = false;
-            let mut redraw_requested = false;
-
             let events = self.events.try_iter();
             for event in events {
                 use WindowEvent::*;
@@ -83,26 +80,21 @@ impl Controller {
                     }
                     Resized(physical_size) => {
                         // TODO
-                        swapchain_recreate = true;
                     }
                     RedrawRequested => {
-                        // TODO
-                        redraw_requested = true;
+                        last_frame = Instant::now();
+                        // TODO: render frame
                     }
                     _ => (),
                 }
             }
 
-            if swapchain_recreate {
-                self.renderer
-                    .recreate_swapchain(self.window.inner_size().into());
-            }
-            if redraw_requested || (Instant::now() - last > frame_duration) {
-                self.renderer.execute_then_present(command_buffer, QueueType::GraphicsPresent);
-                last = Instant::now()
+            let now = Instant::now();
+            let since_last = now.duration_since(last_frame);
+            if since_last >= frame_duration {
+                last_frame = now;
+                // TODO: render frame
             }
         }
     }
-
-    fn draw_frame(&self) {}
 }

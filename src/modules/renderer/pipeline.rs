@@ -13,7 +13,6 @@ use vulkano::{
             rasterization::{
                 CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
             },
-            vertex_input::{Vertex, VertexDefinition},
             viewport::{Scissor, Viewport, ViewportState},
             GraphicsPipelineCreateInfo,
         },
@@ -25,7 +24,7 @@ use vulkano::{
 
 use crate::modules::shaders;
 
-use super::{vertex_buffer::MyVertex, Renderer};
+use super::Renderer;
 
 impl Renderer {
     pub(super) fn create_graphics_pipeline(
