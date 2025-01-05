@@ -10,7 +10,7 @@ use crate::modules::{
 
 use super::{
     camera::{Camera, TrackingCamera},
-    chunk::Chunk,
+    chunk::{Chunk, ChunkMeshVertex},
     light::Light,
 };
 
@@ -24,8 +24,10 @@ pub struct Scene {
 impl Default for Scene {
     fn default() -> Self {
         use std::f32::consts::PI;
+        let mut chunks = HashMap::new();
+        chunks.insert([0, 0, 0], Chunk::random());
         Self {
-            chunks: HashMap::new(),
+            chunks,
             light: Light::default(),
             view: View {
                 camera: Box::new(TrackingCamera {
@@ -48,8 +50,8 @@ impl Scene {
         self.view.view_projection()
     }
 
-    pub fn get_chunk_mesh(&self, idx: ChunkIndex) -> Vec<MyVertex> {
-        todo!()
+    pub fn get_chunk_mesh(&self, idx: ChunkIndex) -> Vec<ChunkMeshVertex> {
+        self.chunks.get(&idx).unwrap().mesh()
     }
 }
 

@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use vulkano::{device::physical::PhysicalDevice, instance::Instance, swapchain::Surface};
+use vulkano::{device::physical::PhysicalDevice, instance::Instance};
 
 use super::Renderer;
 
 impl Renderer {
     pub(super) fn new_physical_device(
         instance: Arc<Instance>,
-        surface: Arc<Surface>,
     ) -> Arc<PhysicalDevice> {
         let physical_devices: Vec<_> = instance
             .enumerate_physical_devices()

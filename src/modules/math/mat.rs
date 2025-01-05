@@ -121,6 +121,7 @@ impl<const N: usize, const X: usize, const M: usize> MatMult<MatNM<X, M>, MatNM<
 //######### TESTS ##########//
 //##########################//
 
+#[cfg(test)]
 mod matrix_tests {
     use crate::modules::math::mat::*;
     #[test]

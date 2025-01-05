@@ -1,14 +1,12 @@
 use std::{
-    collections::{HashMap, HashSet},
-    sync::{self, mpsc::{self, Sender}, Arc},
+    collections::HashMap,
+    sync::{mpsc::Sender, Arc},
 };
 
-use vulkano::{instance::InstanceExtensions, swapchain::Surface};
 use winit::{
-    application::ApplicationHandler, dpi::LogicalSize, event::WindowEvent::{self, *}, event_loop::{self, ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy}, platform::run_on_demand::EventLoopExtRunOnDemand, window::{self, Window, WindowAttributes, WindowId}
+    application::ApplicationHandler, event::WindowEvent::{self, *}, event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy}, window::{Window, WindowAttributes, WindowId}
 };
 
-use crate::modules::renderer::Renderer;
 
 pub enum CustomEvent {
     Exit,
@@ -51,7 +49,7 @@ pub struct WindowManager {
 impl ApplicationHandler<CustomEvent> for WindowManager {
     fn window_event(
         &mut self,
-        event_loop: &ActiveEventLoop,
+        _event_loop: &ActiveEventLoop,
         window_id: WindowId,
         event: WindowEvent,
     ) {
@@ -65,7 +63,7 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
             }
             Destroyed => {
                 self.windows.remove(&window_id);
-                if (self.windows.is_empty()){
+                if self.windows.is_empty(){
                     self.local_proxy.send_event(CustomEvent::Exit);
                 }
             }
@@ -92,7 +90,7 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
         }
     }
     
-    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+    fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
         // no need
     }
 }

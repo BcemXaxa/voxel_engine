@@ -27,9 +27,9 @@ impl Queues {
 
             if flags.contains(QueueFlags::GRAPHICS) {
                 graphics_queues.push((queue, flags, present_support));
-            } else if flags.contains(QueueFlags::GRAPHICS) {
+            } else if flags.contains(QueueFlags::COMPUTE) {
                 compute_queues.push((queue, flags, present_support));
-            } else if flags.contains(QueueFlags::GRAPHICS) {
+            } else if flags.contains(QueueFlags::TRANSFER) {
                 transfer_queues.push((queue, flags, present_support));
             }
         }
@@ -41,21 +41,30 @@ impl Queues {
         }
     }
 
-    pub(super) fn graphics(&self) -> Result<Arc<Queue>, &str> {
+    pub(super) fn get(&self, queue_type: QueueType) -> Result<Arc<Queue>, &str> {
+        match queue_type {
+            QueueType::GraphicsPresent => self.graphics_present(),
+            QueueType::Graphics => self.graphics(),
+            QueueType::Compute => self.compute(),
+            QueueType::Transfer => self.transfer(),
+        }
+    }
+
+    fn graphics(&self) -> Result<Arc<Queue>, &str> {
         match self.graphics_queues.iter().next() {
             Some((queue, _, _)) => Ok(queue.clone()),
             None => Err("Graphics queue was not found"),
         }
     }
 
-    pub(super) fn graphics_present(&self) -> Result<Arc<Queue>, &str> {
+    fn graphics_present(&self) -> Result<Arc<Queue>, &str> {
         match self.graphics_queues.iter().find(|(_, _, present)| *present) {
             Some((queue, _, _)) => Ok(queue.clone()),
             None => Err("Graphics queue supporting presentation was not found"),
         }
     }
 
-    pub(super) fn compute(&self) -> Result<Arc<Queue>, &str> {
+    fn compute(&self) -> Result<Arc<Queue>, &str> {
         if let Some((queue, _, _)) = self.compute_queues.iter().next() {
             Ok(queue.clone())
         } else if let Ok(queue) = self.graphics() {
@@ -65,7 +74,7 @@ impl Queues {
         }
     }
 
-    pub(super) fn transfer(&self) -> Result<Arc<Queue>, &str> {
+    fn transfer(&self) -> Result<Arc<Queue>, &str> {
         if let Some((queue, _, _)) = self.transfer_queues.iter().next() {
             Ok(queue.clone())
         } else if let Ok(queue) = self.compute() {
@@ -74,4 +83,11 @@ impl Queues {
             Err("Transfer queue was not found")
         }
     }
+}
+
+pub enum QueueType {
+    GraphicsPresent,
+    Graphics,
+    Compute,
+    Transfer,
 }

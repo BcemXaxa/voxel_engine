@@ -1,12 +1,12 @@
-#![allow(unused)]
+//#![allow(unused)]
 
 mod modules;
 
-use std::{sync::mpsc, thread, time::Duration};
+use std::{sync::mpsc, thread};
 
 use modules::logic::controller::Controller;
-use modules::renderer::{self, Renderer};
-use modules::window::{CustomEvent, WindowManager, WindowManagerBuilder};
+use modules::renderer::Renderer;
+use modules::window::{CustomEvent, WindowManagerBuilder};
 use vulkano::swapchain::Surface;
 use winit::dpi::LogicalSize;
 use winit::window::WindowAttributes;

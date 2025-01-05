@@ -1,5 +1,5 @@
 use crate::modules::math::{
-    cg::{Orientation, Translation}, mat::{Mat4x4, MatMult}, quaternion::Quaternion, vec::{CrossProd, Vec3, Vec4, VecMult, VecNorm, VecSub}
+    cg::{Orientation, Translation}, mat::{Mat4x4, MatMult}, quaternion::Quaternion, vec::{CrossProd, Vec3, VecMult, VecNorm, VecSub}
 };
 
 pub trait Camera {

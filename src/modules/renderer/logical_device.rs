@@ -23,6 +23,7 @@ impl Renderer {
                 .enumerate()
                 .filter_map(|(index, family_properties)| {
                     let index = index as u32;
+                    // TODO: more proper queue selection?
                     if family_properties.queue_flags.intersects(
                         QueueFlags::GRAPHICS | QueueFlags::COMPUTE | QueueFlags::TRANSFER,
                     ) {

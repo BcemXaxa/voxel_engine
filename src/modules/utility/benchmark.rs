@@ -74,7 +74,7 @@ impl ActiveTimeline {
         }
     }
 
-    fn measures(iter: &mut Peekable<IntoIter<Timestamp>>) -> (Result<Vec<Measure>, ()>) {
+    fn measures(iter: &mut Peekable<IntoIter<Timestamp>>) -> Result<Vec<Measure>, ()> {
         let mut measures = Vec::new();
 
         while let Some(Timestamp {
@@ -140,6 +140,7 @@ impl CompleteTimeline {
     }
 }
 
+#[cfg(test)]
 mod benchmark_tests {
     use super::ActiveTimeline;
 
@@ -160,7 +161,7 @@ mod benchmark_tests {
             {
                 timeline.begin("Physics");
                 let mut k = 0;
-                for i in 0..1_000_000 {
+                for _ in 0..1_000_000 {
                     k += 1;
                 }
                 timeline.end();

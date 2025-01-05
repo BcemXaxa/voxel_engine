@@ -134,6 +134,7 @@ impl<const N: usize> DotProd for VecN<N> {
 //######### TESTS ##########//
 //##########################//
 
+#[cfg(test)]
 mod vec_tests {
     use std::f32::EPSILON;
     use crate::modules::math::vec::*;

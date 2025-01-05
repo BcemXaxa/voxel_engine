@@ -1,12 +1,11 @@
 use std::{
     sync::{mpsc::Receiver, Arc},
-    thread,
     time::{Duration, Instant},
 };
 
 use winit::{event::WindowEvent, window::Window};
 
-use crate::modules::renderer::Renderer;
+use crate::modules::renderer::{queue::QueueType, Renderer};
 
 use super::scene::Scene;
 
@@ -32,6 +31,9 @@ impl Controller {
 
         let mut last = Instant::now() - frame_duration;
         'main: loop {
+            let mut swapchain_recreate = false;
+            let mut redraw_requested = false;
+
             let events = self.events.try_iter();
             for event in events {
                 use WindowEvent::*;
@@ -39,39 +41,39 @@ impl Controller {
                     CloseRequested => {
                         // TODO
                         break 'main;
-                    },
+                    }
                     Destroyed => {
                         // TODO
-                    },
+                    }
                     Focused(_) => {
                         // TODO
-                    },
+                    }
                     KeyboardInput {
                         device_id,
                         event,
                         is_synthetic,
                     } => {
                         // TODO
-                    },
+                    }
                     CursorMoved {
                         device_id,
                         position,
                     } => {
                         // TODO
-                    },
+                    }
                     CursorEntered { device_id } => {
                         // TODO
-                    },
+                    }
                     CursorLeft { device_id } => {
                         // TODO
-                    },
+                    }
                     MouseWheel {
                         device_id,
                         delta,
                         phase,
                     } => {
                         // TODO
-                    },
+                    }
                     MouseInput {
                         device_id,
                         state,
@@ -81,18 +83,26 @@ impl Controller {
                     }
                     Resized(physical_size) => {
                         // TODO
-                    },
+                        swapchain_recreate = true;
+                    }
                     RedrawRequested => {
                         // TODO
-                        last = Instant::now();
+                        redraw_requested = true;
                     }
                     _ => (),
                 }
             }
+
+            if swapchain_recreate {
+                self.renderer
+                    .recreate_swapchain(self.window.inner_size().into());
+            }
+            if redraw_requested || (Instant::now() - last > frame_duration) {
+                self.renderer.execute_then_present(command_buffer, QueueType::GraphicsPresent);
+                last = Instant::now()
+            }
         }
     }
 
-    fn draw_frame(&self) {
-        self.renderer.draw();
-    }
+    fn draw_frame(&self) {}
 }

@@ -1,30 +1,13 @@
 use std::sync::{Arc, LazyLock};
 
 use vulkano::{
-    command_buffer::allocator::{
-        StandardCommandBufferAllocator, StandardCommandBufferAllocatorCreateInfo,
-    },
-    device::{
-        physical::{PhysicalDevice, PhysicalDeviceType},
-        Device, DeviceCreateInfo, DeviceExtensions, Features, Queue, QueueCreateInfo,
-        QueueFamilyProperties, QueueFlags,
-    },
-    format::Format,
-    image::{ImageLayout, SampleCount},
     instance::{Instance, InstanceCreateInfo, InstanceExtensions},
-    memory::allocator::{GenericMemoryAllocatorCreateInfo, StandardMemoryAllocator},
-    render_pass::{
-        AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
-        RenderPass, RenderPassCreateInfo, SubpassDescription,
-    },
-    swapchain::{ColorSpace, PresentMode, Surface, SurfaceCapabilities, SurfaceInfo},
+    swapchain::Surface,
     Version, VulkanLibrary,
 };
-use winit::window::{self, Window};
+use winit::window::Window;
 
-use crate::modules::renderer::vertex_buffer::MyVertex;
-
-use super::{vertex_buffer, Renderer};
+use super::Renderer;
 
 // FIXME: possible memory leak
 // static members don't call "Drop" on program termination,
@@ -43,52 +26,12 @@ impl Renderer {
         let surface = Surface::from_window(instance.clone(), window.clone())
             .expect("Surface creation failed");
 
-        let physical_device = Self::new_physical_device(instance.clone(), surface.clone());
+        let physical_device = Self::new_physical_device(instance.clone());
         let (device, queues) =
             Self::create_logical_device(physical_device.clone(), surface.clone());
 
-        let surface_properties = Self::surface_properties(physical_device.clone(), surface.clone());
-
-        let render_pass = Self::create_render_pass(device.clone(), surface_properties.image_format);
-
-        let (swapchain, framebuffers) = Self::create_swapchain(
-            device.clone(),
-            surface.clone(),
-            render_pass.clone(),
-            surface_properties.clone(),
-        );
-        let graphics_pipeline = Self::create_graphics_pipeline(
-            device.clone(),
-            render_pass.clone(),
-            surface_properties.image_extent,
-        );
-
-        let memory_allocator = Self::create_memory_allocator(device.clone());
-        let vertex_buffer = Self::create_vertex_buffer(memory_allocator.clone(), {
-            vec![
-                MyVertex {
-                    pos: [-0.5, -0.5],
-                    color: [1.0, 1.0, 1.0, 1.0],
-                },
-                MyVertex {
-                    pos: [-0.5, 0.5],
-                    color: [1.0, 1.0, 1.0, 1.0],
-                },
-                MyVertex {
-                    pos: [0.5, 0.0],
-                    color: [1.0, 1.0, 1.0, 1.0],
-                },
-            ]
-        });
-
-        let command_buffer_allocator = Self::create_command_buffer_allocator(device.clone());
-        let command_buffers = Self::write_command_buffers(
-            &command_buffer_allocator,
-            queues.graphics_present().unwrap(),
-            framebuffers.clone(),
-            graphics_pipeline.clone(),
-            vertex_buffer.clone(),
-        );
+        let (swapchain, images) = Self::create_swapchain(device.clone(), surface);
+        let swapchain_images = Self::zip_image_views(images);
 
         Self {
             window,
@@ -98,16 +41,8 @@ impl Renderer {
             device,
             queues,
 
-            render_pass,
-            graphics_pipeline,
             swapchain,
-            framebuffers,
-
-            command_buffer_allocator,
-            command_buffers,
-
-            memory_allocator,
-            vertex_buffer,
+            swapchain_images,
         }
     }
 
@@ -131,73 +66,4 @@ impl Renderer {
 
         Instance::new(LIBRARY.clone(), create_info).expect("Instance creation failed")
     }
-
-    fn surface_info() -> SurfaceInfo {
-        SurfaceInfo {
-            present_mode: Some(PresentMode::Mailbox),
-            ..Default::default()
-        }
-    }
-
-    pub(super) fn surface_properties(
-        physical_device: Arc<PhysicalDevice>,
-        surface: Arc<Surface>,
-    ) -> SurfaceProperties {
-        let capabilities = physical_device
-            .surface_capabilities(&surface, Self::surface_info())
-            .unwrap(); // TODO: handle error
-
-        // TODO: choose best option for image_format and image_color_space
-        let formats = physical_device
-            .surface_formats(&surface, Self::surface_info())
-            .unwrap(); // TODO: handle error
-
-        let (format, color_space) = formats
-            .into_iter()
-            .find(|(format, colorspace)| {
-                *format == Format::B8G8R8A8_SRGB && *colorspace == ColorSpace::SrgbNonLinear
-            })
-            .unwrap();
-
-        // TODO: choose best option for present mode
-        let present_mode = capabilities
-            .compatible_present_modes
-            .iter()
-            .next()
-            .unwrap()
-            .to_owned();
-
-        // in fact, it is always capabilities.current_extent
-        let extent = capabilities.current_extent.unwrap();
-
-        SurfaceProperties {
-            image_format: format,
-            image_color_space: color_space,
-            present_mode,
-            image_extent: extent,
-            capabilities,
-        }
-    }
-
-    fn create_command_buffer_allocator(device: Arc<Device>) -> Arc<StandardCommandBufferAllocator> {
-        // TODO: adjust primary_buffer_count
-        let create_info = StandardCommandBufferAllocatorCreateInfo::default();
-        Arc::new(StandardCommandBufferAllocator::new(
-            device.clone(),
-            create_info,
-        ))
-    }
-
-    fn create_memory_allocator(device: Arc<Device>) -> Arc<StandardMemoryAllocator> {
-        Arc::new(StandardMemoryAllocator::new_default(device))
-    }
-}
-
-#[derive(Clone)]
-pub(super) struct SurfaceProperties {
-    pub image_format: Format,
-    pub image_color_space: ColorSpace,
-    pub present_mode: PresentMode,
-    pub image_extent: [u32; 2],
-    pub capabilities: SurfaceCapabilities,
 }

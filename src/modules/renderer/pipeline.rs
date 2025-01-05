@@ -13,8 +13,7 @@ use vulkano::{
             rasterization::{
                 CullMode, FrontFace, LineRasterizationMode, PolygonMode, RasterizationState,
             },
-            subpass::PipelineSubpassType,
-            vertex_input::{Vertex, VertexDefinition, VertexInputState},
+            vertex_input::{Vertex, VertexDefinition},
             viewport::{Scissor, Viewport, ViewportState},
             GraphicsPipelineCreateInfo,
         },
@@ -29,12 +28,6 @@ use crate::modules::shaders;
 use super::{vertex_buffer::MyVertex, Renderer};
 
 impl Renderer {
-    pub(super) fn recreate_graphics_pipeline(&mut self, extent: [u32; 2]) {
-        // TODO: optimize?
-        self.graphics_pipeline =
-            Self::create_graphics_pipeline(self.device.clone(), self.render_pass.clone(), extent);
-    }
-
     pub(super) fn create_graphics_pipeline(
         device: Arc<Device>,
         render_pass: Arc<RenderPass>,
@@ -93,7 +86,7 @@ impl Renderer {
             depth_clamp_enable: false,
             rasterizer_discard_enable: false,
             polygon_mode: PolygonMode::Fill,
-            cull_mode: CullMode::Back, // TODO: check if it is faster than other methods of backculling
+            cull_mode: CullMode::Back,
             front_face: FrontFace::CounterClockwise,
             depth_bias: None,
             line_width: 1.0,
@@ -141,7 +134,7 @@ impl Renderer {
             PipelineLayout::new(device.clone(), PipelineLayoutCreateInfo::default()).unwrap();
 
         {
-            let mut create_info = GraphicsPipelineCreateInfo {
+            let create_info = GraphicsPipelineCreateInfo {
                 stages: pipeline_stages.into_iter().collect(),
                 vertex_input_state: Some(vertex_input_state),
                 input_assembly_state: Some(input_assembly_state),
