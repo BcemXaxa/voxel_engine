@@ -160,9 +160,9 @@ mod benchmark_tests {
             timeline.begin("Custom");
             {
                 timeline.begin("Physics");
-                let mut k = 0;
+                let mut _k = 0;
                 for _ in 0..1_000_000 {
-                    k += 1;
+                    _k += 1;
                 }
                 timeline.end();
             }

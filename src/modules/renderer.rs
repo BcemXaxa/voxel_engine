@@ -7,6 +7,7 @@ pub mod queue;
 mod render_pass;
 mod physical_device;
 mod logical_device;
+mod pipeline;
 
 use std::sync::Arc;
 
@@ -14,11 +15,8 @@ use queue::Queues;
 use vulkano::{
     device::{physical::PhysicalDevice, Device}, image::{view::ImageView, Image}, instance::Instance, swapchain::Swapchain
 };
-use winit::window::Window;
 
 pub struct Renderer {
-    window: Arc<Window>,
-
     instance: Arc<Instance>,
     physical_device: Arc<PhysicalDevice>,
     device: Arc<Device>,

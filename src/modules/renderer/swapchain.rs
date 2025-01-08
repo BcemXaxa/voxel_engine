@@ -18,7 +18,14 @@ use vulkano::{
 use super::Renderer;
 
 impl Renderer {
+    pub fn swapchain_extent(&self) -> [u32; 2] {
+        self.swapchain.image_extent()
+    }
+
     pub fn recreate_swapchain(&mut self, new_extent: [u32; 2]) {
+        if new_extent == self.swapchain_extent() {
+            return
+        }
         let (new_swapchain, images) = self
             .swapchain
             .recreate(SwapchainCreateInfo {

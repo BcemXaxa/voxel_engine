@@ -49,13 +49,15 @@ impl Renderer {
             samples: SampleCount::Sample1,
             load_op: AttachmentLoadOp::Clear,
             store_op: AttachmentStoreOp::Store,
-            initial_layout: ImageLayout::Undefined,
+            initial_layout: ImageLayout::Undefined, // TODO: check ColorAttachmentOptimal
             final_layout: ImageLayout::PresentSrc,
             ..Default::default()
         };
-        let subpasses = vec![Self::default_subpass(); subpass_count];
 
-        self.create_render_pass(vec![attachment_description], subpasses)
+        self.create_render_pass(
+            vec![attachment_description],
+            vec![Self::default_subpass(); subpass_count],
+        )
     }
 
     pub fn default_subpass() -> SubpassDescription {

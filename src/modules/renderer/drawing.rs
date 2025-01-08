@@ -46,7 +46,7 @@ impl Renderer {
     }
 }
 
-pub(super) enum DrawError {
+pub enum DrawError {
     RecreationRequired,
     AcquisitionFailed,
     ExecutionFailed,

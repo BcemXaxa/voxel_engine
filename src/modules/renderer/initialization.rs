@@ -34,8 +34,6 @@ impl Renderer {
         let swapchain_images = Self::zip_image_views(images);
 
         Self {
-            window,
-
             instance,
             physical_device,
             device,

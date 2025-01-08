@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use super::{mat::Mat4x4, vec::Vec3};
 
 
@@ -20,6 +22,15 @@ impl Translation for Vec3 {
     }
 }
 
+pub trait AspectRatio {
+    fn aspect_ratio(&self) -> f32;
+}
+impl AspectRatio for [u32; 2] {
+    fn aspect_ratio(&self) -> f32 {
+        self[0] as f32 / self[1] as f32
+    }
+}
+
 pub trait Frustum {
     fn projection_matrix(&self) -> Mat4x4;
 }
@@ -36,7 +47,7 @@ impl Frustum for PerspectiveFrustum {
         let far = self.far;
         let near = self.near;
         let ar = self.ar;
-        let t = self.fov.tan();
+        let t = (self.fov/2.0/180.0*PI).tan();
         [
             [1.0 / (t * ar), 0.0, 0.0, 0.0],
             [0.0, 1.0 / t, 0.0, 0.0],

@@ -1,36 +1,39 @@
 use std::{
-    sync::{mpsc::Receiver, Arc},
-    time::{Duration, Instant},
+    cell::Cell, rc::Rc, sync::{mpsc::Receiver, Arc}
 };
 
-use winit::{event::WindowEvent, window::Window};
+use winit::{event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::Window};
 
-use crate::modules::renderer::Renderer;
+use crate::modules::{math::vec::VecAdd, renderer::Renderer, utility::framerate::Framerate};
 
-use super::scene::Scene;
+use super::{render_controller::RenderController, scene::Scene};
 
 pub struct Controller {
     window: Arc<Window>,
     events: Receiver<WindowEvent>,
-    renderer: Renderer,
-    scene: Scene,
+
+    scene: Rc<Scene>,
+    render_controller: RenderController,
 }
 
 impl Controller {
     pub fn new(window: Arc<Window>, events: Receiver<WindowEvent>, renderer: Renderer) -> Self {
+        let scene = Rc::new(Scene::default());
         Self {
             window,
             events,
-            renderer,
-            scene: Scene::default(),
+            scene: scene.clone(),
+            render_controller: RenderController::new(renderer, scene),
         }
     }
 
     pub fn main_loop(&mut self) {
-        let frame_duration = Duration::from_secs_f32(1.0 / 60.0);
-        let mut last_frame = Instant::now();
+        let mut framerate = Framerate::new(Some(60.0));
 
         'main: loop {
+            let mut redraw_request = false;
+            let mut resized = Option::None;
+
             let events = self.events.try_iter();
             for event in events {
                 use WindowEvent::*;
@@ -50,6 +53,36 @@ impl Controller {
                         event,
                         is_synthetic,
                     } => {
+                        if event.physical_key == KeyCode::KeyW && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 1.0, 0.0]);
+                        }
+                        if event.physical_key == KeyCode::KeyS && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([0.0, -1.0, 0.0]);
+                        }
+                        if event.physical_key == KeyCode::KeyA && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([-1.0, 0.0, 0.0]);
+                        }
+                        if event.physical_key == KeyCode::KeyD && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([1.0, 0.0, 0.0]);
+                        }
+                        if event.physical_key == KeyCode::Space && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, 1.0]);
+                        }
+                        if event.physical_key == KeyCode::ShiftLeft && event.state.is_pressed() {
+                            let pos = self.scene.camera.borrow().pos;
+                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, -1.0]);
+                        }
+                        if event.physical_key == KeyCode::Minus && event.state.is_pressed() {
+                            self.render_controller.fov_minus();
+                        }
+                        if event.physical_key == KeyCode::Equal && event.state.is_pressed() {
+                            self.render_controller.fov_plus();
+                        }
                         // TODO
                     }
                     CursorMoved {
@@ -79,21 +112,23 @@ impl Controller {
                         // TODO
                     }
                     Resized(physical_size) => {
+                        resized = Some(physical_size);
                         // TODO
                     }
                     RedrawRequested => {
-                        last_frame = Instant::now();
-                        // TODO: render frame
+                        redraw_request = true;
                     }
                     _ => (),
                 }
             }
 
-            let now = Instant::now();
-            let since_last = now.duration_since(last_frame);
-            if since_last >= frame_duration {
-                last_frame = now;
-                // TODO: render frame
+            if let Some(physical_size) = resized {
+                // TODO
+                self.render_controller.extent_changed(physical_size.into());
+            }
+            if redraw_request || framerate.should_render() {
+                framerate.refresh();
+                self.render_controller.draw_frame();
             }
         }
     }

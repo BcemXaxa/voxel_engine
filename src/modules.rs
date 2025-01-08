@@ -12,12 +12,16 @@ mod math {
 pub mod logic {
     mod scene;
     pub mod camera;
+    mod voxel;
     mod chunk;
+    mod chunk_render;
+    mod chunk_mesher;
     mod light;
     pub mod controller;
-    // mod render_controller;
+    mod render_controller;
 }
 mod utility {
     pub mod benchmark;
     pub mod for_multi;
+    pub mod framerate;
 }

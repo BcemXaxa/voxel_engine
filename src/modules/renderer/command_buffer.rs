@@ -14,11 +14,11 @@ impl Renderer {
     pub fn create_command_buffer_builder(
         &self,
         queue_type: QueueType,
-        allocator: StandardCommandBufferAllocator,
+        allocator: &StandardCommandBufferAllocator,
     ) -> (CmdBuilder, Arc<Queue>) {
         let queue = self.queues.get(queue_type).unwrap();
         let cmd_bulider = AutoCommandBufferBuilder::primary(
-            &allocator,
+            allocator,
             queue.queue_family_index(),
             CommandBufferUsage::OneTimeSubmit,
         )

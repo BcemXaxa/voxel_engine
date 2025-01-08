@@ -21,8 +21,8 @@ impl Renderer {
     }
 
     pub(super) fn is_physical_device_suitable(physical_device: Arc<PhysicalDevice>) -> bool {
-        let properties = physical_device.properties();
-        let mut has_properties = true;
+        let _properties = physical_device.properties();
+        let mut _has_properties = true;
         //has_properties &= properties.device_type == PhysicalDeviceType::DiscreteGpu;
 
         let features = physical_device.supported_features();
@@ -36,6 +36,6 @@ impl Renderer {
         // TODO: make score system (optional)
         // TODO: make list of missing properties & features & extensions (optional)
 
-        has_properties && has_features && has_extensions
+        _has_properties && has_features && has_extensions
     }
 }

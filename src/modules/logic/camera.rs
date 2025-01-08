@@ -1,5 +1,5 @@
 use crate::modules::math::{
-    cg::{Orientation, Translation}, mat::{Mat4x4, MatMult}, quaternion::Quaternion, vec::{CrossProd, Vec3, VecMult, VecNorm, VecSub}
+    cg::{Orientation, Translation}, mat::{Mat4x4, MatMult, MatTranspose}, quaternion::Quaternion, vec::{CrossProd, Vec3, VecMult, VecNorm, VecSub}
 };
 
 pub trait Camera {
@@ -7,8 +7,8 @@ pub trait Camera {
 }
 
 pub struct OrientedCamera {
-    pos: Vec3,
-    orientation: Quaternion,
+    pub pos: Vec3,
+    pub orientation: Quaternion,
 }
 
 impl Camera for OrientedCamera {
@@ -27,17 +27,17 @@ pub struct TrackingCamera {
 
 impl Camera for TrackingCamera {
     fn view_matrix(&self) -> Mat4x4 {
-        const UP: Vec3 = [0.0, 1.0, 0.0];
+        const UP: Vec3 = [0.0, 0.0, 1.0];
 
-        let z = self.target.sub(self.pos).norm();
-        let x = z.cross(UP).norm();
-        let y = x.cross(z);
+        let y = self.target.sub(self.pos).norm();
+        let x = y.cross(UP).norm();
+        let z = x.cross(y);
 
-        [
+        self.pos.mult(-1.0).translation_matrix().mult([
             [x[0], x[1], x[2], 0.0],
             [y[0], y[1], y[2], 0.0],
             [z[0], z[1], z[2], 0.0],
             [0.0, 0.0, 0.0, 1.0],
-        ]
+        ])
     }
 }
