@@ -1,24 +1,25 @@
-pub mod renderer;
-pub mod window;
 mod interface;
+pub mod renderer;
 mod shaders;
+pub mod window;
 
 mod math {
-    pub mod mat;
-    pub mod vec;
-    pub mod quaternion;
     pub mod cg;
+    pub mod mat;
+    pub mod quaternion;
+    pub mod vec;
 }
 pub mod logic {
-    mod scene;
     pub mod camera;
-    mod voxel;
     mod chunk;
-    mod chunk_render;
     mod chunk_mesher;
-    mod light;
+    mod chunk_render;
     pub mod controller;
+    mod light;
     mod render_controller;
+    mod scene;
+    mod voxel;
+    mod key_input;
 }
 mod utility {
     pub mod benchmark;

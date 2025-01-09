@@ -136,8 +136,8 @@ impl<const N: usize> DotProd for VecN<N> {
 
 #[cfg(test)]
 mod vec_tests {
-    use std::f32::EPSILON;
     use crate::modules::math::vec::*;
+    use std::f32::EPSILON;
 
     #[test]
     fn test_norm_len() {

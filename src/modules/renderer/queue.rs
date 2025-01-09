@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use vulkano::{device::{physical::PhysicalDevice, Queue, QueueFamilyProperties, QueueFlags}, swapchain::Surface};
+use vulkano::{
+    device::{physical::PhysicalDevice, Queue, QueueFamilyProperties, QueueFlags},
+    swapchain::Surface,
+};
 
 type PresentSupport = bool;
 pub(super) struct Queues {

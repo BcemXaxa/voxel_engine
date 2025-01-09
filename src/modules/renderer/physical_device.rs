@@ -5,9 +5,7 @@ use vulkano::{device::physical::PhysicalDevice, instance::Instance};
 use super::Renderer;
 
 impl Renderer {
-    pub(super) fn new_physical_device(
-        instance: Arc<Instance>,
-    ) -> Arc<PhysicalDevice> {
+    pub(super) fn new_physical_device(instance: Arc<Instance>) -> Arc<PhysicalDevice> {
         let physical_devices: Vec<_> = instance
             .enumerate_physical_devices()
             .expect("Physical devices enumeration failed")

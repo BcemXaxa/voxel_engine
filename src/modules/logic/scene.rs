@@ -1,4 +1,7 @@
-use std::{cell::{Cell, RefCell}, collections::HashMap};
+use std::{
+    cell::{Cell, RefCell},
+    collections::HashMap,
+};
 
 use super::{
     camera::{Camera, OrientedCamera, TrackingCamera},
@@ -11,7 +14,7 @@ type ChunkIndex = [isize; 3];
 pub struct Scene {
     chunks: HashMap<ChunkIndex, Chunk>,
     light: Light,
-    pub camera: RefCell<OrientedCamera>,
+    pub camera: RefCell<TrackingCamera>,
 }
 
 impl Default for Scene {
@@ -21,9 +24,9 @@ impl Default for Scene {
         Self {
             chunks,
             light: Light::default(),
-            camera: RefCell::new(OrientedCamera {
+            camera: RefCell::new(TrackingCamera {
                 pos: [0.0, -5.0, 0.0],
-                orientation: [0.0, 0.5, 0.5, 0.0].norm(),
+                target: [32.0, 32.0, 32.0].div(2.0),
             }),
         }
     }

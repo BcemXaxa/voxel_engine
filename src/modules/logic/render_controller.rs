@@ -1,4 +1,4 @@
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
 use vulkano::{
     buffer::{Buffer, BufferCreateInfo, BufferUsage, Subbuffer},
@@ -6,21 +6,23 @@ use vulkano::{
         allocator::StandardCommandBufferAllocator, RenderPassBeginInfo, SubpassBeginInfo,
         SubpassEndInfo,
     },
+    format::ClearValue,
+    image::view::ImageView,
     memory::allocator::{AllocationCreateInfo, MemoryTypeFilter, StandardMemoryAllocator},
     pipeline::{graphics::viewport::Viewport, GraphicsPipeline, Pipeline},
     render_pass::RenderPass,
 };
 
 use crate::modules::{
-    math::{
-        cg::*,
-        mat::*,
-    },
+    math::{cg::*, mat::*},
     renderer::{queue::QueueType, Renderer},
 };
 
 use super::{
-    camera::Camera, chunk_mesher::{self, ChunkMeshVertex}, chunk_render::{self, ChunkPushConstant}, scene::Scene
+    camera::Camera,
+    chunk_mesher::{self, ChunkMeshVertex},
+    chunk_render::{self, ChunkPushConstant},
+    scene::Scene,
 };
 
 pub struct RenderController {
@@ -33,6 +35,7 @@ pub struct RenderController {
     mem_allocator: Arc<StandardMemoryAllocator>,
 
     render_pass: Arc<RenderPass>,
+    depth_image: Arc<ImageView>,
     chunk_pipeline: Arc<GraphicsPipeline>,
 
     chunk_vertices: Vec<Subbuffer<[ChunkMeshVertex]>>,
@@ -43,7 +46,8 @@ impl RenderController {
         let cmd_allocator = Arc::new(renderer.create_command_buffer_allocator());
         let mem_allocator = Arc::new(renderer.create_memory_allocator());
 
-        let render_pass = renderer.default_render_pass(1);
+        let render_pass = renderer.default_render_pass_with_depth(1);
+        let depth_buffer = renderer.create_depth_buffer(mem_allocator.clone());
         let chunk_pipeline = renderer.create_graphics_pipeline(|| {
             chunk_render::chunk_graphics_pipeline(&renderer, render_pass.clone().first_subpass())
         });
@@ -84,6 +88,7 @@ impl RenderController {
             mem_allocator,
 
             render_pass,
+            depth_image: depth_buffer,
             chunk_pipeline,
 
             chunk_vertices,
@@ -92,6 +97,9 @@ impl RenderController {
 
     pub fn extent_changed(&mut self, extent: [u32; 2]) {
         self.renderer.recreate_swapchain(extent);
+        self.depth_image = self
+            .renderer
+            .create_depth_buffer(self.mem_allocator.clone());
         self.frustum.ar = extent.aspect_ratio();
     }
 
@@ -109,43 +117,51 @@ impl RenderController {
                 depth_range: 0.0..=1.0,
             }]
         };
-        let draw_result =
-            self.renderer
-                .execute_then_present(vec![self.render_pass.clone()], |framebuffers| {
+        let draw_result = self.renderer.execute_then_present(
+            vec![(self.render_pass.clone(), Some(self.depth_image.clone()))],
+            |framebuffers| {
+                cmd_builder
+                    .set_viewport(0, viewports.into())
+                    .unwrap()
+                    .push_constants(
+                        self.chunk_pipeline.layout().clone(),
+                        0,
+                        ChunkPushConstant {
+                            pvm: self
+                                .frustum
+                                .projection_matrix()
+                                .mult(self.scene.camera.borrow().view_matrix())
+                                .trans(),
+                        },
+                    )
+                    .unwrap()
+                    .begin_render_pass(
+                        RenderPassBeginInfo {
+                            clear_values: vec![
+                                Some([0.0, 0.0, 0.0, 1.0].into()),
+                                Some(ClearValue::Depth(1.0)),
+                            ],
+                            ..RenderPassBeginInfo::framebuffer(framebuffers[0].clone())
+                        },
+                        SubpassBeginInfo::default(),
+                    )
+                    .unwrap()
+                    .bind_pipeline_graphics(self.chunk_pipeline.clone())
+                    .unwrap();
+                for subbuffer in &self.chunk_vertices {
                     cmd_builder
-                        .set_viewport(0, viewports.into())
+                        .bind_vertex_buffers(0, subbuffer.clone())
                         .unwrap()
-                        .push_constants(
-                            self.chunk_pipeline.layout().clone(),
-                            0,
-                            ChunkPushConstant {
-                                pvm: self.frustum.projection_matrix().mult(self.scene.camera.borrow().view_matrix()).trans(),
-                            },
-                        )
-                        .unwrap()
-                        .begin_render_pass(
-                            RenderPassBeginInfo {
-                                clear_values: vec![Some([0.0, 0.0, 0.0, 1.0].into())],
-                                ..RenderPassBeginInfo::framebuffer(framebuffers[0].clone())
-                            },
-                            SubpassBeginInfo::default(),
-                        )
-                        .unwrap()
-                        .bind_pipeline_graphics(self.chunk_pipeline.clone())
+                        .draw(subbuffer.len() as u32, 1, 0, 0)
                         .unwrap();
-                    for subbuffer in &self.chunk_vertices {
-                        cmd_builder
-                            .bind_vertex_buffers(0, subbuffer.clone())
-                            .unwrap()
-                            .draw(subbuffer.len() as u32, 1, 0, 0)
-                            .unwrap();
-                    }
-                    cmd_builder
-                        .end_render_pass(SubpassEndInfo::default())
-                        .unwrap();
+                }
+                cmd_builder
+                    .end_render_pass(SubpassEndInfo::default())
+                    .unwrap();
 
-                    cmd_builder.build().unwrap()
-                });
+                cmd_builder.build().unwrap()
+            },
+        );
         // match draw_result {
         //     Ok(_) => println!("everything is nice"),
         //     Err(_) => println!("damn that's crazy"),

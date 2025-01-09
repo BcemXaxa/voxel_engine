@@ -1,4 +1,8 @@
-use std::{cmp::Reverse, collections::BinaryHeap, time::{Duration, Instant}};
+use std::{
+    cmp::Reverse,
+    collections::BinaryHeap,
+    time::{Duration, Instant},
+};
 
 pub struct Framerate {
     target: Option<Duration>,
@@ -23,7 +27,7 @@ impl Framerate {
             let this = self.last + time;
             if this.elapsed() < time {
                 self.last = this;
-                return
+                return;
             }
         }
         self.last = Instant::now();
@@ -54,7 +58,7 @@ impl Framerate {
         self.stamps.len() as u32
     }
 
-    pub fn frame_time(&self) -> f32 {
-        1.0 / self.fps() as f32
+    pub fn frame_time(&self) -> Duration {
+        Duration::from_secs_f32(1.0 / self.fps() as f32)
     }
 }

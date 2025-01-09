@@ -3,8 +3,8 @@ use std::sync::Arc;
 use vulkano::{
     device::Device,
     pipeline::{
-        graphics::GraphicsPipelineCreateInfo,
-        layout::PipelineLayoutCreateInfo, GraphicsPipeline, PipelineLayout,
+        graphics::GraphicsPipelineCreateInfo, layout::PipelineLayoutCreateInfo, GraphicsPipeline,
+        PipelineLayout,
     },
     shader::{EntryPoint, ShaderModule},
     Validated, VulkanError,

@@ -1,9 +1,14 @@
 use vulkano::{buffer::BufferContents, pipeline::graphics::vertex_input::Vertex};
 
-use crate::{for_multi, modules::{logic::chunk::Chunk, math::vec::{Vec3, VecAdd}}};
+use crate::{
+    for_multi,
+    modules::{
+        logic::chunk::Chunk,
+        math::vec::{Vec3, VecAdd},
+    },
+};
 
 use super::voxel::Color;
-
 
 #[derive(BufferContents, Vertex)]
 #[repr(C)]

@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use vulkano::{
-    image::{ImageLayout, SampleCount},
+    format::Format,
+    image::{view::ImageView, Image, ImageLayout, SampleCount},
     render_pass::{
         AttachmentDescription, AttachmentLoadOp, AttachmentReference, AttachmentStoreOp,
         RenderPass, RenderPassCreateInfo, SubpassDescription,
@@ -44,7 +45,7 @@ impl Renderer {
     }
 
     pub fn default_render_pass(&self, subpass_count: usize) -> Arc<RenderPass> {
-        let attachment_description = AttachmentDescription {
+        let color_attachment = AttachmentDescription {
             format: self.swapchain.image_format(),
             samples: SampleCount::Sample1,
             load_op: AttachmentLoadOp::Clear,
@@ -55,20 +56,60 @@ impl Renderer {
         };
 
         self.create_render_pass(
-            vec![attachment_description],
+            vec![color_attachment],
             vec![Self::default_subpass(); subpass_count],
         )
     }
 
+    pub fn default_render_pass_with_depth(&self, subpass_count: usize) -> Arc<RenderPass> {
+        let color_attachment = AttachmentDescription {
+            format: self.swapchain.image_format(),
+            samples: SampleCount::Sample1,
+            load_op: AttachmentLoadOp::Clear,
+            store_op: AttachmentStoreOp::Store,
+            initial_layout: ImageLayout::Undefined, // TODO: check ColorAttachmentOptimal
+            final_layout: ImageLayout::PresentSrc,
+            ..Default::default()
+        };
+        let depth_attachment = AttachmentDescription {
+            format: Format::D32_SFLOAT,
+            samples: SampleCount::Sample1,
+            load_op: AttachmentLoadOp::Clear,
+            store_op: AttachmentStoreOp::DontCare,
+            initial_layout: ImageLayout::Undefined,
+            final_layout: ImageLayout::DepthStencilAttachmentOptimal,
+            stencil_load_op: Some(AttachmentLoadOp::DontCare),
+            stencil_store_op: Some(AttachmentStoreOp::DontCare),
+            stencil_initial_layout: None,
+            stencil_final_layout: None,
+            ..Default::default()
+        };
+        let subpass = {
+            let depth_ref = AttachmentReference {
+                attachment: 1,
+                layout: ImageLayout::DepthStencilAttachmentOptimal,
+                ..Default::default()
+            };
+            SubpassDescription {
+                depth_stencil_attachment: Some(depth_ref),
+                ..Self::default_subpass()
+            }
+        };
+        self.create_render_pass(
+            vec![color_attachment, depth_attachment],
+            vec![subpass; subpass_count],
+        )
+    }
+
     pub fn default_subpass() -> SubpassDescription {
-        let attachment_reference = AttachmentReference {
+        let color_ref = AttachmentReference {
             attachment: 0,
             layout: ImageLayout::ColorAttachmentOptimal,
             ..Default::default()
         };
 
         SubpassDescription {
-            color_attachments: vec![Some(attachment_reference)],
+            color_attachments: vec![Some(color_ref)],
             ..Default::default()
         }
     }

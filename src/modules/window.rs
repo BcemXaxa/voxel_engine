@@ -4,9 +4,11 @@ use std::{
 };
 
 use winit::{
-    application::ApplicationHandler, event::WindowEvent::{self, *}, event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy}, window::{Window, WindowAttributes, WindowId}
+    application::ApplicationHandler,
+    event::WindowEvent::{self, *},
+    event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
+    window::{Window, WindowAttributes, WindowId},
 };
-
 
 pub enum CustomEvent {
     Exit,
@@ -19,7 +21,7 @@ pub struct WindowManagerBuilder {
 impl Default for WindowManagerBuilder {
     fn default() -> Self {
         let event_loop = EventLoop::with_user_event().build().unwrap();
-        
+
         Self { event_loop }
     }
 }
@@ -63,11 +65,11 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
             }
             Destroyed => {
                 self.windows.remove(&window_id);
-                if self.windows.is_empty(){
+                if self.windows.is_empty() {
                     self.local_proxy.send_event(CustomEvent::Exit);
                 }
             }
-            _ => ()
+            _ => (),
         }
 
         if let Some((_, sender)) = self.windows.get(&window_id) {
@@ -86,10 +88,10 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
                 let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
                 window_sender.send(window.clone());
                 self.windows.insert(window.id(), (window, event_sender));
-            },
+            }
         }
     }
-    
+
     fn resumed(&mut self, _event_loop: &ActiveEventLoop) {
         // no need
     }

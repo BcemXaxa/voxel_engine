@@ -22,13 +22,20 @@ impl Chunk {
         const D: usize = Chunk::DIMENSIONS;
         let mut random = Self::empty();
         for_multi!(0..D, 0..D, 0..D; |x: usize, y: usize, z: usize| {
-            let color = [
-                (255 - (x * 31) % 255) as u8,
-                (255 - (y * 31) % 255) as u8,
-                (255 - (z * 31) % 255) as u8,
-                255
-            ];
-            random.voxels[z][y][x] = Some(color);
+            let seed = 8*x + 2*y + 3*z;
+            let condition = seed % 27 == 0;
+            random.voxels[z][y][x] = if condition {
+                let color = [
+                    (x * 23 % 255) as u8,
+                    (y * 224 % 255) as u8,
+                    (z * 25 % 255) as u8,
+                    100
+                ];
+                Some(color)
+            }
+            else {
+                None
+            }
         });
         random
     }

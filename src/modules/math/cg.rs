@@ -1,7 +1,9 @@
 use std::f32::consts::PI;
 
-use super::{mat::Mat4x4, vec::Vec3};
-
+use super::{
+    mat::{Mat4x4, MatMult},
+    vec::Vec3,
+};
 
 pub trait Orientation {
     fn rotation_matrix(&self) -> Mat4x4;
@@ -21,6 +23,13 @@ impl Translation for Vec3 {
         ]
     }
 }
+
+const SPACE_FIX: Mat4x4 = [
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, -1.0, 0.0],
+    [0.0, 1.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 1.0],
+];
 
 pub trait AspectRatio {
     fn aspect_ratio(&self) -> f32;
@@ -47,13 +56,14 @@ impl Frustum for PerspectiveFrustum {
         let far = self.far;
         let near = self.near;
         let ar = self.ar;
-        let t = (self.fov/2.0/180.0*PI).tan();
+        let t = (self.fov / 2.0 / 180.0 * PI).tan();
         [
             [1.0 / (t * ar), 0.0, 0.0, 0.0],
             [0.0, 1.0 / t, 0.0, 0.0],
             [0.0, 0.0, far / (far - near), -near * far / (far - near)],
             [0.0, 0.0, 1.0, 0.0],
         ]
+        .mult(SPACE_FIX)
     }
 }
 

@@ -1,13 +1,22 @@
 use std::sync::Arc;
 
 use vulkano::{
-    command_buffer::PrimaryAutoCommandBuffer, render_pass::{Framebuffer, RenderPass}, swapchain::{self, SwapchainPresentInfo}, sync::{self, GpuFuture}, Validated, VulkanError
+    command_buffer::PrimaryAutoCommandBuffer,
+    image::view::ImageView,
+    render_pass::{Framebuffer, RenderPass},
+    swapchain::{self, SwapchainPresentInfo},
+    sync::{self, GpuFuture},
+    Validated, VulkanError,
 };
 
 use super::{queue::QueueType, Renderer};
 
 impl Renderer {
-    pub fn execute_then_present<F>(&self, render_passes: Vec<Arc<RenderPass>>, command_buffer: F) -> Result<(), DrawError>
+    pub fn execute_then_present<F>(
+        &self,
+        render_passes: Vec<(Arc<RenderPass>, Option<Arc<ImageView>>)>,
+        command_buffer: F,
+    ) -> Result<(), DrawError>
     where
         F: FnOnce(Vec<Arc<Framebuffer>>) -> Arc<PrimaryAutoCommandBuffer>,
     {
@@ -21,10 +30,13 @@ impl Renderer {
             _ => return Err(DrawError::AcquisitionFailed),
         };
 
-        let framebuffers = render_passes.into_iter().map(|render_pass| {
-            self.create_framebuffer(image_i, render_pass)
-        }).collect();
-        
+        let framebuffers = render_passes
+            .into_iter()
+            .map(|(render_pass, depth_image)| {
+                self.create_framebuffer(image_i, render_pass, depth_image)
+            })
+            .collect();
+
         let queue = self.queues.get(QueueType::GraphicsPresent).unwrap();
         let execution = sync::now(self.device.clone())
             .join(acquire_future)

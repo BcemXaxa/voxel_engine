@@ -22,9 +22,13 @@ impl Renderer {
         self.swapchain.image_extent()
     }
 
+    fn is_valid(&self, extent: [u32; 2]) -> bool {
+        extent != self.swapchain_extent() && extent[0] != 0 && extent[1] != 0
+    }
+
     pub fn recreate_swapchain(&mut self, new_extent: [u32; 2]) {
-        if new_extent == self.swapchain_extent() {
-            return
+        if !self.is_valid(new_extent) {
+            return;
         }
         let (new_swapchain, images) = self
             .swapchain
@@ -84,12 +88,30 @@ impl Renderer {
             .collect()
     }
 
-    pub fn create_framebuffer(&self, image_i: u32, render_pass: Arc<RenderPass>) -> Arc<Framebuffer> {
+    pub fn create_framebuffer(
+        &self,
+        image_i: u32,
+        render_pass: Arc<RenderPass>,
+        depth_image: Option<Arc<ImageView>>,
+    ) -> Arc<Framebuffer> {
         // TODO(optimize): framebuffer creation
         // this implementation means we create framebuffer for each render pass every frame
         // which (I guess) is not performant
+
+        let mut attachments = {
+            let color_attachment = self
+                .swapchain_images
+                .get(image_i as usize)
+                .unwrap()
+                .1
+                .clone();
+            vec![color_attachment]
+        };
+        if let Some(depth_attachment) = depth_image {
+            attachments.push(depth_attachment);
+        }
         let create_info = FramebufferCreateInfo {
-            attachments: vec![self.swapchain_images.get(image_i as usize).unwrap().1.clone()],
+            attachments,
             extent: self.swapchain.image_extent(),
             ..Default::default()
         };

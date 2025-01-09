@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use vulkano::{
     command_buffer::{
-        allocator::StandardCommandBufferAllocator,
-        AutoCommandBufferBuilder, CommandBufferUsage, PrimaryAutoCommandBuffer,
+        allocator::StandardCommandBufferAllocator, AutoCommandBufferBuilder, CommandBufferUsage,
+        PrimaryAutoCommandBuffer,
     },
     device::Queue,
 };

@@ -1,12 +1,18 @@
 use std::{
-    cell::Cell, rc::Rc, sync::{mpsc::Receiver, Arc}
+    cell::Cell,
+    rc::Rc,
+    sync::{mpsc::Receiver, Arc},
 };
 
-use winit::{event::WindowEvent, keyboard::{KeyCode, PhysicalKey}, window::Window};
+use winit::{
+    event::WindowEvent,
+    keyboard::{KeyCode, PhysicalKey},
+    window::Window,
+};
 
 use crate::modules::{math::vec::VecAdd, renderer::Renderer, utility::framerate::Framerate};
 
-use super::{render_controller::RenderController, scene::Scene};
+use super::{key_input::KeyInputHelper, render_controller::RenderController, scene::Scene};
 
 pub struct Controller {
     window: Arc<Window>,
@@ -28,7 +34,11 @@ impl Controller {
     }
 
     pub fn main_loop(&mut self) {
-        let mut framerate = Framerate::new(Some(60.0));
+        let mut input = KeyInputHelper::default();
+
+        let mut framerate = Framerate::new(None);
+        let mut fixed = Framerate::new(Some(60.0));
+        let mut console_stat = Framerate::new(Some(1.0));
 
         'main: loop {
             let mut redraw_request = false;
@@ -53,37 +63,8 @@ impl Controller {
                         event,
                         is_synthetic,
                     } => {
-                        if event.physical_key == KeyCode::KeyW && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 1.0, 0.0]);
-                        }
-                        if event.physical_key == KeyCode::KeyS && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([0.0, -1.0, 0.0]);
-                        }
-                        if event.physical_key == KeyCode::KeyA && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([-1.0, 0.0, 0.0]);
-                        }
-                        if event.physical_key == KeyCode::KeyD && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([1.0, 0.0, 0.0]);
-                        }
-                        if event.physical_key == KeyCode::Space && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, 1.0]);
-                        }
-                        if event.physical_key == KeyCode::ShiftLeft && event.state.is_pressed() {
-                            let pos = self.scene.camera.borrow().pos;
-                            self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, -1.0]);
-                        }
-                        if event.physical_key == KeyCode::Minus && event.state.is_pressed() {
-                            self.render_controller.fov_minus();
-                        }
-                        if event.physical_key == KeyCode::Equal && event.state.is_pressed() {
-                            self.render_controller.fov_plus();
-                        }
                         // TODO
+                        input.input(event);
                     }
                     CursorMoved {
                         device_id,
@@ -122,6 +103,41 @@ impl Controller {
                 }
             }
 
+            if fixed.should_render() {
+                fixed.refresh();
+                
+                if input.is_pressed(KeyCode::KeyW) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.5, 0.0]);
+                }
+                if input.is_pressed(KeyCode::KeyS) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([0.0, -0.5, 0.0]);
+                }
+                if input.is_pressed(KeyCode::KeyA) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([-0.5, 0.0, 0.0]);
+                }
+                if input.is_pressed(KeyCode::KeyD) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([0.5, 0.0, 0.0]);
+                }
+                if input.is_pressed(KeyCode::Space) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, 0.5]);
+                }
+                if input.is_pressed(KeyCode::ControlLeft) {
+                    let pos = self.scene.camera.borrow().pos;
+                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, -0.5]);
+                }
+                if input.is_pressed(KeyCode::Minus) {
+                    self.render_controller.fov_minus();
+                }
+                if input.is_pressed(KeyCode::Equal) {
+                    self.render_controller.fov_plus();
+                }
+            }
+
             if let Some(physical_size) = resized {
                 // TODO
                 self.render_controller.extent_changed(physical_size.into());
@@ -129,6 +145,14 @@ impl Controller {
             if redraw_request || framerate.should_render() {
                 framerate.refresh();
                 self.render_controller.draw_frame();
+            }
+            if console_stat.should_render() {
+                console_stat.refresh();
+                println!(
+                    "FPS: {}; Frame: {:?}",
+                    framerate.fps(),
+                    framerate.frame_time()
+                );
             }
         }
     }

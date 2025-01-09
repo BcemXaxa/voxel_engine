@@ -8,6 +8,7 @@ use vulkano::{
                 AttachmentBlend, BlendFactor, BlendOp, ColorBlendAttachmentState, ColorBlendState,
                 ColorComponents,
             },
+            depth_stencil::{DepthState, DepthStencilState},
             input_assembly::{InputAssemblyState, PrimitiveTopology},
             multisample::MultisampleState,
             rasterization::{CullMode, FrontFace, PolygonMode, RasterizationState},
@@ -60,11 +61,11 @@ pub fn chunk_graphics_pipeline(
 
     let color_blend_attachment_state = ColorBlendAttachmentState {
         blend: Some(AttachmentBlend {
-            src_color_blend_factor: BlendFactor::One,
-            dst_color_blend_factor: BlendFactor::Zero,
+            src_color_blend_factor: BlendFactor::SrcAlpha,
+            dst_color_blend_factor: BlendFactor::OneMinusSrcAlpha,
             color_blend_op: BlendOp::Add,
-            src_alpha_blend_factor: BlendFactor::One,
-            dst_alpha_blend_factor: BlendFactor::Zero,
+            src_alpha_blend_factor: BlendFactor::SrcAlpha,
+            dst_alpha_blend_factor: BlendFactor::OneMinusSrcAlpha,
             alpha_blend_op: BlendOp::Add,
         }),
         color_write_enable: true,
@@ -75,6 +76,11 @@ pub fn chunk_graphics_pipeline(
         subpass.num_color_attachments(),
         color_blend_attachment_state,
     );
+
+    let depth_stencil_state = DepthStencilState {
+        depth: Some(DepthState::simple()),
+        ..Default::default()
+    };
 
     let layout = {
         let push_constant_ranges = vec![PushConstantRange {
@@ -98,10 +104,9 @@ pub fn chunk_graphics_pipeline(
         viewport_state: Some(ViewportState::default()),
         multisample_state: Some(MultisampleState::default()),
         color_blend_state: Some(color_blend_state),
+        depth_stencil_state: Some(depth_stencil_state),
         subpass: Some(subpass.into()),
-        dynamic_state: HashSet::from_iter(
-            [DynamicState::Viewport].into_iter(),
-        ),
+        dynamic_state: HashSet::from_iter([DynamicState::Viewport].into_iter()),
         ..GraphicsPipelineCreateInfo::layout(layout)
     }
 }
