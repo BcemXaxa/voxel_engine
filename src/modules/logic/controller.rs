@@ -5,7 +5,7 @@ use std::{
 };
 
 use winit::{
-    event::WindowEvent,
+    event::{DeviceEvent, Event, WindowEvent},
     keyboard::{KeyCode, PhysicalKey},
     window::Window,
 };
@@ -16,18 +16,25 @@ use super::{key_input::KeyInputHelper, render_controller::RenderController, scen
 
 pub struct Controller {
     window: Arc<Window>,
-    events: Receiver<WindowEvent>,
+    window_events: Receiver<WindowEvent>,
+    device_events: Receiver<DeviceEvent>,
 
     scene: Rc<Scene>,
     render_controller: RenderController,
 }
 
 impl Controller {
-    pub fn new(window: Arc<Window>, events: Receiver<WindowEvent>, renderer: Renderer) -> Self {
+    pub fn new(
+        window: Arc<Window>,
+        renderer: Renderer,
+        window_events: Receiver<WindowEvent>,
+        device_events: Receiver<DeviceEvent>,
+    ) -> Self {
         let scene = Rc::new(Scene::default());
         Self {
             window,
-            events,
+            window_events,
+            device_events,
             scene: scene.clone(),
             render_controller: RenderController::new(renderer, scene),
         }
@@ -44,8 +51,8 @@ impl Controller {
             let mut redraw_request = false;
             let mut resized = Option::None;
 
-            let events = self.events.try_iter();
-            for event in events {
+            let window_events = self.window_events.try_iter();
+            for event in window_events {
                 use WindowEvent::*;
                 match event {
                     CloseRequested => {
@@ -103,32 +110,46 @@ impl Controller {
                 }
             }
 
+            let device_events = self.device_events.try_iter();
+            for event in device_events {
+                match event {
+                    DeviceEvent::MouseMotion { delta } => {
+                        self.scene
+                            .camera
+                            .borrow_mut()
+                            .local_rotate([delta.0 as f32, delta.1 as f32]);
+                    }
+                    _ => (),
+                }
+            }
+
             if fixed.should_render() {
                 fixed.refresh();
-                
+
+                if input.is_pressed(KeyCode::KeyQ) {
+                    self.scene.camera.borrow_mut().local_roll(1.5);
+                }
+                if input.is_pressed(KeyCode::KeyE) {
+                    self.scene.camera.borrow_mut().local_roll(-1.5);
+                }
+
                 if input.is_pressed(KeyCode::KeyW) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.5, 0.0]);
+                    self.scene.camera.borrow_mut().local_move([0.0, 0.5, 0.0]);
                 }
                 if input.is_pressed(KeyCode::KeyS) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([0.0, -0.5, 0.0]);
+                    self.scene.camera.borrow_mut().local_move([0.0, -0.5, 0.0]);
                 }
                 if input.is_pressed(KeyCode::KeyA) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([-0.5, 0.0, 0.0]);
+                    self.scene.camera.borrow_mut().local_move([-0.5, 0.0, 0.0]);
                 }
                 if input.is_pressed(KeyCode::KeyD) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([0.5, 0.0, 0.0]);
+                    self.scene.camera.borrow_mut().local_move([0.5, 0.0, 0.0]);
                 }
                 if input.is_pressed(KeyCode::Space) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, 0.5]);
+                    self.scene.camera.borrow_mut().local_move([0.0, 0.0, 0.5]);
                 }
                 if input.is_pressed(KeyCode::ControlLeft) {
-                    let pos = self.scene.camera.borrow().pos;
-                    self.scene.camera.borrow_mut().pos = pos.add([0.0, 0.0, -0.5]);
+                    self.scene.camera.borrow_mut().local_move([0.0, 0.0, -0.5]);
                 }
                 if input.is_pressed(KeyCode::Minus) {
                     self.render_controller.fov_minus();

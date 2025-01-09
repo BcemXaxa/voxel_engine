@@ -5,14 +5,22 @@ use std::{
 
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent::{self, *},
+    event::{
+        DeviceEvent, DeviceId,
+        WindowEvent::{self, *},
+    },
     event_loop::{ActiveEventLoop, EventLoop, EventLoopProxy},
     window::{Window, WindowAttributes, WindowId},
 };
 
 pub enum CustomEvent {
     Exit,
-    CreateWindow(WindowAttributes, Sender<Arc<Window>>, Sender<WindowEvent>),
+    CreateWindow(
+        WindowAttributes,
+        Sender<Arc<Window>>,
+        Sender<WindowEvent>,
+        Sender<DeviceEvent>,
+    ),
 }
 
 pub struct WindowManagerBuilder {
@@ -44,7 +52,7 @@ impl WindowManagerBuilder {
 }
 
 pub struct WindowManager {
-    windows: HashMap<WindowId, (Arc<Window>, Sender<WindowEvent>)>,
+    windows: HashMap<WindowId, (Arc<Window>, Sender<WindowEvent>, Sender<DeviceEvent>)>,
     local_proxy: EventLoopProxy<CustomEvent>,
 }
 
@@ -57,7 +65,7 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
     ) {
         match event {
             CloseRequested => {
-                if let Some((window, _)) = self.windows.get(&window_id) {
+                if let Some((window, _, _)) = self.windows.get(&window_id) {
                     if let Some(false) = window.is_visible() {
                         window.set_visible(true);
                     }
@@ -72,7 +80,7 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
             _ => (),
         }
 
-        if let Some((_, sender)) = self.windows.get(&window_id) {
+        if let Some((_, sender, _)) = self.windows.get(&window_id) {
             // Send event
             // Destroy window if no receiver
             if sender.send(event).is_err() {
@@ -80,14 +88,39 @@ impl ApplicationHandler<CustomEvent> for WindowManager {
             }
         }
     }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _device_id: DeviceId,
+        event: DeviceEvent,
+    ) {
+        for (_, _, sender) in self.windows.values() {
+            // Send event
+            // Print message if no receiver
+            if sender.send(event.clone()).is_err() {
+                // TODO(handle_error)
+                println!("No receiver")
+            }
+        }
+    }
+
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: CustomEvent) {
         use CustomEvent::*;
         match event {
             Exit => event_loop.exit(),
-            CreateWindow(window_attributes, window_sender, event_sender) => {
+            CreateWindow(
+                window_attributes,
+                window_sender,
+                window_event_sender,
+                device_event_sender,
+            ) => {
                 let window = Arc::new(event_loop.create_window(window_attributes).unwrap());
                 window_sender.send(window.clone());
-                self.windows.insert(window.id(), (window, event_sender));
+                self.windows.insert(
+                    window.id(),
+                    (window, window_event_sender, device_event_sender),
+                );
             }
         }
     }

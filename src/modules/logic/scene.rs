@@ -8,13 +8,13 @@ use super::{
     chunk::Chunk,
     light::Light,
 };
-use crate::modules::math::vec::*;
+use crate::modules::math::{angle::Angle, cg::Orientation, quaternion::Quaternion, vec::*};
 
 type ChunkIndex = [isize; 3];
 pub struct Scene {
     chunks: HashMap<ChunkIndex, Chunk>,
     light: Light,
-    pub camera: RefCell<TrackingCamera>,
+    pub camera: RefCell<OrientedCamera>,
 }
 
 impl Default for Scene {
@@ -24,9 +24,13 @@ impl Default for Scene {
         Self {
             chunks,
             light: Light::default(),
-            camera: RefCell::new(TrackingCamera {
+            // camera: RefCell::new(TrackingCamera {
+            //     pos: [0.0, -5.0, 0.0],
+            //     target: [32.0, 32.0, 32.0].div(2.0),
+            // }),
+            camera: RefCell::new(OrientedCamera {
                 pos: [0.0, -5.0, 0.0],
-                target: [32.0, 32.0, 32.0].div(2.0),
+                orientation: Quaternion::default(),
             }),
         }
     }

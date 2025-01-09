@@ -1,6 +1,7 @@
 use std::f32::consts::PI;
 
 use super::{
+    angle::Angle,
     mat::{Mat4x4, MatMult},
     vec::Vec3,
 };
@@ -47,7 +48,7 @@ pub trait Frustum {
 pub struct PerspectiveFrustum {
     pub near: f32,
     pub far: f32,
-    pub fov: f32,
+    pub fov: Angle,
     pub ar: f32,
 }
 
@@ -56,7 +57,7 @@ impl Frustum for PerspectiveFrustum {
         let far = self.far;
         let near = self.near;
         let ar = self.ar;
-        let t = (self.fov / 2.0 / 180.0 * PI).tan();
+        let t = (self.fov / 2.0).tan();
         [
             [1.0 / (t * ar), 0.0, 0.0, 0.0],
             [0.0, 1.0 / t, 0.0, 0.0],
@@ -67,6 +68,7 @@ impl Frustum for PerspectiveFrustum {
     }
 }
 
+// TODO(feat): orthographic frustum
 pub struct OrthographicFrustum {
     width: f32,
     height: f32,

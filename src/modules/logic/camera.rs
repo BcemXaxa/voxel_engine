@@ -1,12 +1,17 @@
 use crate::modules::math::{
+    angle::Angle,
     cg::{Orientation, Translation},
     mat::{Mat4x4, MatMult},
     quaternion::Quaternion,
-    vec::{CrossProd, Vec3, VecMult, VecNorm, VecSub},
+    vec::{CrossProd, Vec3, VecAdd, VecMult, VecNorm, VecSub},
 };
 
 pub trait Camera {
-    fn view_matrix(&self) -> Mat4x4;
+    fn view_matrix(&self) -> Mat4x4 {
+        self.rotation_matrix().mult(self.translation_matrix())
+    }
+    fn translation_matrix(&self) -> Mat4x4;
+    fn rotation_matrix(&self) -> Mat4x4;
 }
 
 pub struct OrientedCamera {
@@ -15,10 +20,32 @@ pub struct OrientedCamera {
 }
 
 impl Camera for OrientedCamera {
-    fn view_matrix(&self) -> Mat4x4 {
-        self.orientation
-            .rotation_matrix()
-            .mult(self.pos.mult(-1.0).translation_matrix())
+    fn translation_matrix(&self) -> Mat4x4 {
+        self.pos.mult(-1.0).translation_matrix()
+    }
+    fn rotation_matrix(&self) -> Mat4x4 {
+        self.orientation.rotation_matrix()
+    }
+}
+
+impl OrientedCamera {
+    pub fn local_move(&mut self, vec: Vec3) {
+        let vec = [vec[0], vec[1], vec[2], 1.0];
+        let vec = self.rotation_matrix().mult(vec);
+        let vec = [vec[0], vec[1], vec[2]];
+        self.pos = self.pos.add(vec);
+    }
+    pub fn local_rotate(&mut self, delta: [f32; 2]) {
+        let delta = delta.div(8.0);
+        self.orientation = Quaternion::from([
+            0.0.into(),
+            Angle::from_deg(delta[1]),
+            Angle::from_deg(delta[0]),
+        ]) * self.orientation;
+    }
+    pub fn local_roll(&mut self, delta: f32) {
+        self.orientation =
+            Quaternion::from([Angle::from_deg(delta), 0.0.into(), 0.0.into()]) * self.orientation;
     }
 }
 
@@ -28,7 +55,10 @@ pub struct TrackingCamera {
 }
 
 impl Camera for TrackingCamera {
-    fn view_matrix(&self) -> Mat4x4 {
+    fn translation_matrix(&self) -> Mat4x4 {
+        self.pos.mult(-1.0).translation_matrix()
+    }
+    fn rotation_matrix(&self) -> Mat4x4 {
         const UP: Vec3 = [0.0, 0.0, 1.0];
 
         let y = self.target.sub(self.pos).norm();
@@ -40,6 +70,15 @@ impl Camera for TrackingCamera {
             [y[0], y[1], y[2], 0.0],
             [z[0], z[1], z[2], 0.0],
             [0.0, 0.0, 0.0, 1.0],
-        ].mult(self.pos.mult(-1.0).translation_matrix())
+        ]
+    }
+}
+
+impl TrackingCamera {
+    pub fn local_move(&mut self, vec: Vec3) {
+        let vec = [vec[0], vec[1], vec[2], 1.0];
+        let vec = self.rotation_matrix().mult(vec);
+        let vec = [vec[0], vec[1], vec[2]];
+        self.pos = self.pos.add(vec);
     }
 }

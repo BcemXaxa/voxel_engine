@@ -8,7 +8,9 @@ mod math {
     pub mod mat;
     pub mod quaternion;
     pub mod vec;
+    pub mod angle;
 }
+
 pub mod logic {
     pub mod camera;
     mod chunk;
@@ -21,6 +23,7 @@ pub mod logic {
     mod voxel;
     mod key_input;
 }
+
 mod utility {
     pub mod benchmark;
     pub mod for_multi;

@@ -14,7 +14,7 @@ use vulkano::{
 };
 
 use crate::modules::{
-    math::{cg::*, mat::*},
+    math::{angle::Angle, cg::*, mat::*},
     renderer::{queue::QueueType, Renderer},
 };
 
@@ -55,7 +55,7 @@ impl RenderController {
         let frustum = PerspectiveFrustum {
             near: 1e-1,
             far: 1e5,
-            fov: 90.0,
+            fov: Angle::from_deg(90.0),
             ar: renderer.swapchain_extent().aspect_ratio(),
         };
 
@@ -169,10 +169,10 @@ impl RenderController {
     }
 
     pub fn fov_plus(&mut self) {
-        self.frustum.fov += 1.0;
+        self.frustum.fov += Angle::from_deg(1.0);
     }
 
     pub fn fov_minus(&mut self) {
-        self.frustum.fov -= 1.0;
+        self.frustum.fov -= Angle::from_deg(1.0);
     }
 }

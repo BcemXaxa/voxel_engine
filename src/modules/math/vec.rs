@@ -2,6 +2,8 @@
 //###### DECLARATION #######//
 //##########################//
 
+use super::mat::{MatMult, MatNM};
+
 pub type VecN<const N: usize> = [f32; N];
 pub type Vec2 = VecN<2>;
 pub type Vec3 = VecN<3>;
@@ -130,6 +132,16 @@ impl<const N: usize> DotProd for VecN<N> {
     }
 }
 
+impl<const N: usize, const M: usize> MatMult<VecN<N>, VecN<M>> for MatNM<N, M> {
+    fn mult(self, other: VecN<N>) -> VecN<M> {
+        let mut out = VecN::zero();
+        for m in 0..M {
+            out[m] = (0..N).into_iter().map(|n| self[n][m] * other[n]).sum()
+        }
+        out
+    }
+}
+
 //##########################//
 //######### TESTS ##########//
 //##########################//
@@ -195,5 +207,17 @@ mod vec_tests {
 
         assert_eq!(arr1.add(arr2), Vec2::basis().mult(2.0));
         assert_eq!(arr1.sub(arr2), Vec2::zero())
+    }
+
+    #[test]
+    fn test_mat_vec_mult() {
+        let mat = [
+            [0.0, 1.0, 3.0],
+            [0.0, 1.0, 3.0],
+            [0.0, 1.0, 3.0],
+            [0.0, 1.0, 3.0],
+        ];
+        let vec = [1.0, 1.0, 1.0, 1.0];
+        println!("{:?}", mat.mult(vec))
     }
 }
