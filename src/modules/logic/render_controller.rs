@@ -14,7 +14,7 @@ use vulkano::{
 };
 
 use crate::modules::{
-    math::{angle::Angle, cg::*, mat::*},
+    math::{angle::Angle, cg::*, mat::*, vec::VecMult},
     renderer::{queue::QueueType, Renderer},
 };
 
@@ -38,7 +38,7 @@ pub struct RenderController {
     depth_image: Arc<ImageView>,
     chunk_pipeline: Arc<GraphicsPipeline>,
 
-    chunk_vertices: Vec<Subbuffer<[ChunkMeshVertex]>>,
+    chunk_vertices: Vec<(Subbuffer<[ChunkMeshVertex]>, [isize; 3])>,
 }
 
 impl RenderController {
@@ -68,15 +68,17 @@ impl RenderController {
             usage: BufferUsage::VERTEX_BUFFER,
             ..Default::default()
         };
-        let buffer = Buffer::from_iter(
-            mem_allocator.clone(),
-            create_info,
-            allocation_info,
-            chunk_mesher::mesh(scene.get_chunk([0, 0, 0]).unwrap()),
-        )
-        .unwrap();
         let mut chunk_vertices = Vec::new();
-        chunk_vertices.push(buffer);
+        for (idx, chunk) in scene.get_chunks() {
+            let buffer = Buffer::from_iter(
+                mem_allocator.clone(),
+                create_info.clone(),
+                allocation_info.clone(),
+                chunk_mesher::mesh(chunk),
+            )
+            .unwrap();
+            chunk_vertices.push((buffer, idx.clone()));
+        }
 
         Self {
             renderer,
@@ -123,18 +125,6 @@ impl RenderController {
                 cmd_builder
                     .set_viewport(0, viewports.into())
                     .unwrap()
-                    .push_constants(
-                        self.chunk_pipeline.layout().clone(),
-                        0,
-                        ChunkPushConstant {
-                            pvm: self
-                                .frustum
-                                .projection_matrix()
-                                .mult(self.scene.camera.borrow().view_matrix())
-                                .trans(),
-                        },
-                    )
-                    .unwrap()
                     .begin_render_pass(
                         RenderPassBeginInfo {
                             clear_values: vec![
@@ -148,7 +138,22 @@ impl RenderController {
                     .unwrap()
                     .bind_pipeline_graphics(self.chunk_pipeline.clone())
                     .unwrap();
-                for subbuffer in &self.chunk_vertices {
+                for (subbuffer, idx) in &self.chunk_vertices {
+                    let projection = self.frustum.projection_matrix();
+                    let view = self.scene.camera.borrow().view_matrix();
+                    let model = [idx[0] as f32, idx[1] as f32, idx[2] as f32]
+                        .mult(32.0)
+                        .translation_matrix();
+                    cmd_builder
+                        .push_constants(
+                            self.chunk_pipeline.layout().clone(),
+                            0,
+                            ChunkPushConstant {
+                                pvm: projection.mult(view).mult(model).trans(),
+                            },
+                        )
+                        .unwrap();
+
                     cmd_builder
                         .bind_vertex_buffers(0, subbuffer.clone())
                         .unwrap()

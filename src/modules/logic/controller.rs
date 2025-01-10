@@ -43,7 +43,7 @@ impl Controller {
     pub fn main_loop(&mut self) {
         let mut input = KeyInputHelper::default();
 
-        let mut framerate = Framerate::new(None);
+        let mut framerate = Framerate::new(Some(60.0));
         let mut fixed = Framerate::new(Some(60.0));
         let mut console_stat = Framerate::new(Some(1.0));
 
@@ -156,6 +156,10 @@ impl Controller {
                 }
                 if input.is_pressed(KeyCode::Equal) {
                     self.render_controller.fov_plus();
+                }
+
+                if input.is_pressed(KeyCode::Escape) {
+                    break 'main;
                 }
             }
 

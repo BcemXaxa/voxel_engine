@@ -1,6 +1,6 @@
 use std::{
     cell::{Cell, RefCell},
-    collections::HashMap,
+    collections::{hash_map::Iter, HashMap},
 };
 
 use super::{
@@ -21,6 +21,7 @@ impl Default for Scene {
     fn default() -> Self {
         let mut chunks = HashMap::new();
         chunks.insert([0, 0, 0], Chunk::random());
+        chunks.insert([1, 0, 0], Chunk::cat());
         Self {
             chunks,
             light: Light::default(),
@@ -39,5 +40,9 @@ impl Default for Scene {
 impl Scene {
     pub fn get_chunk(&self, idx: ChunkIndex) -> Option<&Chunk> {
         self.chunks.get(&idx)
+    }
+
+    pub fn get_chunks(&self) -> Iter<ChunkIndex, Chunk>{
+        self.chunks.iter()
     }
 }
